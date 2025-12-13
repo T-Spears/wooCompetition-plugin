@@ -1,0 +1,18 @@
+.raff-progress { margin-top:8px; }
+.raff-progress-bar {
+  background:#f1f1f1;
+  border-radius:8px;
+  height:14px;
+  overflow:hidden;
+  position:relative;
+}
+.raff-progress-inner {
+  display:block;
+  height:100%;
+  background:linear-gradient(90deg,#7b3cff,#3fb1ff);
+  transition:width 600ms ease;
+}
+.raff-countdown { font-size:14px; color:#222; margin-bottom:8px; }
+.raff-validation input[type="text"] { width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; }
+.raff-home h2, .raff-winners h2 { margin-top:0; }
+
