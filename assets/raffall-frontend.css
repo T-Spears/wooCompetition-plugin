@@ -1,6 +1,13 @@
+:root{
+  --raff-fill: #7b3cff;
+  --raff-bg: #f1f1f1;
+  --raff-flip-bg: #fff;
+  --raff-flip-text: #222;
+}
+
 .raff-progress { margin-top:8px; }
 .raff-progress-bar {
-  background:#f1f1f1;
+  background:var(--raff-bg);
   border-radius:8px;
   height:14px;
   overflow:hidden;
@@ -9,10 +16,60 @@
 .raff-progress-inner {
   display:block;
   height:100%;
-  background:linear-gradient(90deg,#7b3cff,#3fb1ff);
+  background:linear-gradient(90deg,var(--raff-fill),#3fb1ff);
   transition:width 600ms ease;
 }
-.raff-countdown { font-size:14px; color:#222; margin-bottom:8px; }
+.raff-countdown {
+  display:flex;
+  gap:10px;
+  align-items:center;
+  margin-bottom:8px;
+  font-size:14px;
+  color:var(--raff-flip-text);
+}
 .raff-validation input[type="text"] { width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; }
 .raff-home h2, .raff-winners h2 { margin-top:0; }
+
+/* Flip clock styles (scoped to plugin) */
+.raff-flip { text-align:center; font-family:inherit; }
+.raff-flip .label { font-size:11px; color:#666; margin-top:6px; }
+.raff-flip .number {
+    width:56px;
+    height:48px;
+    position:relative;
+    perspective:600px;
+    margin:0 auto;
+}
+.raff-flip .number .current,
+.raff-flip .number .next {
+    position:absolute;
+    left:0; right:0; top:0; bottom:0;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:20px;
+    background:var(--raff-flip-bg); color:var(--raff-flip-text);
+    border:1px solid #ddd; border-radius:6px;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.02);
+    backface-visibility: hidden;
+    transform-origin: center;
+}
+
+/* 'current' is the visible face; 'next' starts rotated and flips into view */
+.raff-flip .number .current { z-index:2; transform: rotateX(0deg); }
+.raff-flip .number .next { transform: rotateX(-180deg); z-index:1; }
+
+/* Flip animation */
+.raff-flip .number.flip .current {
+    transition: transform 0.6s ease-in;
+    transform: rotateX(180deg);
+}
+.raff-flip .number.flip .next {
+    transition: transform 0.6s ease-out;
+    transform: rotateX(0deg);
+}
+
+/* Smaller / responsive adjustments */
+@media (max-width:420px) {
+    .raff-flip .number { width:44px; height:40px; }
+    .raff-flip .number .current, .raff-flip .number .next { font-size:16px; }
+}
 

@@ -43,10 +43,20 @@ class RaffAll {
         add_action('raffall_daily_gdpr_event', [$this, 'gdpr_anonymize_job']);
 
         add_action('wp_enqueue_scripts', [$this, 'enqueue_raff_frontend_assets']);
+        add_action('wp_footer', [$this, 'render_cart_sidebar']); // inject sidebar markup into footer
+        add_shortcode('raffall_cart_sidebar', [$this, 'render_cart_sidebar_shortcode']); // shortcode for manual placement
+
+        // Admin actions for export and admin-managed allocation/credit
+        add_action('admin_post_raffall_export_entries', [$this, 'admin_export_entries']);
+        add_action('admin_post_raffall_allocate_winner', [$this, 'admin_allocate_winner']);
+        add_action('admin_post_raffall_grant_site_credit', [$this, 'admin_grant_site_credit']);
 
         add_action('update_option', function($option, $old, $new){
             if (str_starts_with($option, 'raffall_')) $this->audit('option_update', ['option' => $option]);
         }, 10, 3);
+
+        add_action('admin_menu', [$this, 'add_admin_settings_page']);
+        add_action('admin_init', [$this, 'register_admin_settings']);
     }
 
     /* Activation and DB tables */
@@ -303,35 +313,559 @@ class RaffAll {
         }
     }
 
+    /* Duplicate methods removed: the implementations above are used to avoid redeclaration errors */
+
+    /* GDPR anonymization */
+    public function gdpr_anonymize_job() {
+        $threshold = (new DateTimeImmutable('-2 years'))->format('Y-m-d H:i:s');
+        $this->anonymize_users_before($threshold);
+        $this->anonymize_guest_orders_before($threshold);
+    }
+
+    private function anonymize_users_before(string $datetime) {
+        global $wpdb;
+        $users = get_users([
+            'fields' => ['ID'],
+            'meta_query' => [
+                'relation' => 'OR',
+                ['key' => 'raff_retain_personal_data', 'compare' => 'NOT EXISTS'],
+                ['key' => 'raff_retain_personal_data', 'value' => 'yes', 'compare' => '!='],
+            ]
+        ]);
+        foreach ($users as $u) {
+            $last_order = $wpdb->get_var($wpdb->prepare("
+                SELECT MAX(post_date) FROM {$wpdb->posts}
+                WHERE post_type='shop_order' AND post_author=%d
+            ", $u->ID));
+            if ($last_order && $last_order > $datetime) continue;
+
+            update_user_meta($u->ID, 'first_name', '');
+            update_user_meta($u->ID, 'last_name', '');
+            update_user_meta($u->ID, 'billing_first_name', '');
+            update_user_meta($u->ID, 'billing_last_name', '');
+            update_user_meta($u->ID, 'billing_address_1', '');
+            update_user_meta($u->ID, 'billing_city', '');
+            update_user_meta($u->ID, 'billing_postcode', '');
+            update_user_meta($u->ID, 'billing_phone', '');
+            update_user_meta($u->ID, 'raff_email_hash', wp_hash(get_userdata($u->ID)->user_email));
+            $this->audit('gdpr_user_anonymized', ['user_id' => $u->ID]);
+        }
+    }
+
+    private function anonymize_guest_orders_before(string $datetime) {
+        global $wpdb;
+        $orders = $wpdb->get_results($wpdb->prepare("
+            SELECT ID FROM {$wpdb->posts}
+            WHERE post_type='shop_order' AND post_date < %s
+        ", $datetime));
+        foreach ($orders as $o) {
+            $order = wc_get_order($o->ID);
+            if (!$order) continue;
+            if ($order->get_user_id()) continue;
+
+            $order->set_billing_first_name('');
+            $order->set_billing_last_name('');
+            $order->set_billing_address_1('');
+            $order->set_billing_city('');
+            $order->set_billing_postcode('');
+            $order->set_billing_phone('');
+            $order->save();
+            $this->audit('gdpr_guest_order_anonymized', ['order_id' => $o->ID]);
+        }
+    }
+
+    /* Audit logging */
+    private function audit(string $event, array $ctx = []) {
+        try {
+            global $wpdb;
+            $table = $wpdb->prefix . self::AUDIT_TABLE;
+            $wpdb->insert($table, [
+                'event_type' => $event,
+                'context' => wp_json_encode($ctx, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'user_id' => get_current_user_id() ?: null,
+                'order_id' => $ctx['order_id'] ?? null,
+                'product_id' => $ctx['product_id'] ?? null,
+                'created_at' => current_time('mysql'),
+            ]);
+        } catch (\Throwable $e) {
+            // ignore
+        }
+    }
+
+    private function mask(string $s): string {
+        if (strlen($s) <= 2) return '*';
+        return substr($s,0,1) . str_repeat('*', max(1, strlen($s)-2)) . substr($s,-1);
+    }
+
+    /* Enqueue assets */
+    public function enqueue_raff_frontend_assets() {
+        wp_register_script('raffall-frontend', plugin_dir_url(__FILE__) . 'assets/raffall-frontend.js', ['jquery'], self::VERSION, true);
+        wp_register_style('raffall-frontend-css', plugin_dir_url(__FILE__) . 'assets/raffall-frontend.css', [], self::VERSION);
+        wp_register_script('raffall-cart-sidebar', plugin_dir_url(__FILE__) . 'assets/raffall-cart-sidebar.js', ['jquery'], self::VERSION, true);
+        wp_register_style('raffall-cart-sidebar-css', plugin_dir_url(__FILE__) . 'assets/raffall-cart-sidebar.css', [], self::VERSION);
+
+        // enqueue both so sidebar is functional when enabled
+        wp_enqueue_script('raffall-cart-sidebar');
+        wp_enqueue_style('raffall-cart-sidebar-css');
+
+        // localize defaults and urls
+        $sidebar_defaults = [
+            'enabled' => get_option('raffall_cart_sidebar_enable', '1') === '1',
+            'cart_url' => wc_get_cart_url(),
+            'checkout_url' => wc_get_checkout_url(),
+            'strings' => [
+                'title' => __('Your cart','raffall'),
+                'view_cart' => __('View cart','raffall'),
+                'checkout' => __('Checkout','raffall'),
+                'empty' => __('Your cart is empty','raffall'),
+                'customise' => __('Customize','raffall'),
+                'reset' => __('Reset','raffall'),
+            ],
+        ];
+        wp_localize_script('raffall-cart-sidebar', 'raffAllCartSidebar', $sidebar_defaults);
+
+        wp_enqueue_script('raffall-frontend');
+        wp_enqueue_style('raffall-frontend-css');
+
+        // Inject CSS variables from options so colours can be changed from admin
+        $fill = esc_attr(get_option('raffall_fill_color', '#7b3cff'));
+        $bg   = esc_attr(get_option('raffall_bg_color', '#f1f1f1'));
+        $flip_bg = esc_attr(get_option('raffall_flip_bg', '#fff'));
+        $flip_text = esc_attr(get_option('raffall_flip_text', '#222'));
+
+        $vars = ":root{ --raff-fill: {$fill}; --raff-bg: {$bg}; --raff-flip-bg: {$flip_bg}; --raff-flip-text: {$flip_text}; }";
+        wp_add_inline_style('raffall-frontend-css', $vars);
+    }
+
+    /* Cart sidebar output helpers */
+    public function render_cart_sidebar() {
+        // echo sidebar only when enabled
+        if (get_option('raffall_cart_sidebar_enable', '1') !== '1') return;
+        echo $this->get_cart_sidebar_markup();
+    }
+
+    public function render_cart_sidebar_shortcode($atts = []) {
+        return $this->get_cart_sidebar_markup();
+    }
+
+    private function get_cart_sidebar_markup() : string {
+        ob_start();
+        $cart = WC()->cart ?? null;
+        $items = $cart ? $cart->get_cart() : [];
+        $cart_count = $cart ? $cart->get_cart_contents_count() : 0;
+        ?>
+        <div id="raffall-cart-sidebar" class="raffall-cart-sidebar" data-open="false" aria-hidden="true">
+            <div class="raffall-cart-overlay" data-action="close" tabindex="-1"></div>
+            <aside class="raffall-cart-panel" role="complementary" aria-labelledby="raffall-cart-title">
+                <header class="raffall-cart-header">
+                    <h2 id="raffall-cart-title"><?php echo esc_html(__('Your cart','raffall')); ?> <span class="raffall-cart-count">(<?php echo (int)$cart_count; ?>)</span></h2>
+                    <button class="raffall-cart-close" aria-label="<?php echo esc_attr__('Close cart','raffall'); ?>">×</button>
+                </header>
+
+                <div class="raffall-cart-body" data-cart-body>
+                    <?php if (empty($items)) : ?>
+                        <p class="raffall-cart-empty"><?php echo esc_html(__('Your cart is empty','raffall')); ?></p>
+                    <?php else : ?>
+                        <ul class="raffall-cart-items">
+                            <?php foreach ($items as $key => $item) :
+                                $product = $item['data'];
+                                if (!$product) continue;
+                                $thumb = $product->get_image();
+                                $name = $product->get_name();
+                                $qty = (int)$item['quantity'];
+                                $price = wc_price(wc_get_price_to_display($product) * $qty);
+                                $remove = esc_url(wc_get_cart_remove_url($key));
+                                ?>
+                                <li class="raffall-cart-item">
+                                    <div class="raffall-cart-item-thumb"><?php echo $thumb; ?></div>
+                                    <div class="raffall-cart-item-meta">
+                                        <div class="raffall-cart-item-title"><?php echo esc_html($name); ?></div>
+                                        <div class="raffall-cart-item-qty"><?php echo 'x' . $qty; ?></div>
+                                        <div class="raffall-cart-item-price"><?php echo $price; ?></div>
+                                    </div>
+                                    <a class="raffall-cart-item-remove" href="<?php echo esc_url(wc_get_cart_remove_url($key)); ?>" aria-label="<?php echo esc_attr__('Remove item','raffall'); ?>">&times;</a>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                </div>
+
+                <div class="raffall-cart-footer">
+                    <div class="raffall-cart-totals">
+                        <?php if ($cart) : ?>
+                            <p class="raffall-cart-subtotal"><?php echo esc_html__('Subtotal:','raffall'); ?> <strong><?php echo wp_kses_post($cart->get_cart_subtotal()); ?></strong></p>
+                        <?php endif; ?>
+                    </div>
+                    <div class="raffall-cart-actions">
+                        <a class="button raffall-cart-view" href="<?php echo esc_url(wc_get_cart_url()); ?>"><?php echo esc_html__('View cart','raffall'); ?></a>
+                        <a class="button alt raffall-cart-checkout" href="<?php echo esc_url(wc_get_checkout_url()); ?>"><?php echo esc_html__('Checkout','raffall'); ?></a>
+                    </div>
+                </div>
+
+                <!-- customiser (front-end only; saves to localStorage) -->
+                <div class="raffall-cart-customiser">
+                    <button class="raffall-cart-customiser-toggle" type="button"><?php echo esc_html__('Customize','raffall'); ?></button>
+                    <div class="raffall-cart-customiser-panel" aria-hidden="true">
+                        <label>Background color<br><input type="color" data-custom="bg" value="#ffffff"></label>
+                        <label>Accent color<br><input type="color" data-custom="accent" value="#7b3cff"></label>
+                        <label>Text color<br><input type="color" data-custom="text" value="#222222"></label>
+                        <label>Width (%)<br><input type="range" min="200" max="600" data-custom="width" value="360"></label>
+                        <label>Position<br>
+                            <select data-custom="position">
+                                <option value="right">Right</option>
+                                <option value="left">Left</option>
+                            </select>
+                        </label>
+                        <div class="raffall-cart-customiser-actions">
+                            <button class="raffall-cart-customiser-reset" type="button"><?php echo esc_html__('Reset','raffall'); ?></button>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- small floating toggle button -->
+            <button class="raffall-cart-toggle" aria-label="<?php echo esc_attr__('Open cart','raffall'); ?>">
+                <span class="raffall-cart-toggle-icon">🛒</span>
+                <span class="raffall-cart-toggle-count"><?php echo (int)$cart_count; ?></span>
+            </button>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    // Admin settings UI
+    public function add_admin_settings_page() {
+        add_options_page('Raff-all Display', 'Raff-all Display', 'manage_options', 'raffall-display', [$this, 'render_settings_page']);
+        add_submenu_page('tools.php', 'Raff-all Competitions', 'Raff-all Competitions', 'manage_options', 'raffall-competitions', [$this, 'render_competitions_page']);
+    }
+
+    public function register_admin_settings() {
+        register_setting('raffall_display_group', 'raffall_fill_color', ['type'=>'string', 'default' => '#7b3cff']);
+        register_setting('raffall_display_group', 'raffall_bg_color', ['type'=>'string', 'default' => '#f1f1f1']);
+        register_setting('raffall_display_group', 'raffall_flip_bg', ['type'=>'string', 'default' => '#fff']);
+        register_setting('raffall_display_group', 'raffall_flip_text', ['type'=>'string', 'default' => '#222']);
+        register_setting('raffall_display_group', 'raffall_show_countdown_product', ['type'=>'string', 'default' => '1']);
+        register_setting('raffall_display_group', 'raffall_show_progress_product', ['type'=>'string', 'default' => '1']);
+        register_setting('raffall_display_group', 'raffall_show_countdown_cards', ['type'=>'string', 'default' => '0']);
+        register_setting('raffall_display_group', 'raffall_show_progress_cards', ['type'=>'string', 'default' => '0']);
+        register_setting('raffall_display_group', 'raffall_cart_sidebar_enable', ['type'=>'string', 'default' => '1']);
+    }
+
+    public function render_settings_page() {
+        if (!current_user_can('manage_options')) return;
+        ?>
+        <div class="wrap">
+            <h1>Raff-all display settings</h1>
+            <form method="post" action="options.php">
+                <?php settings_fields('raffall_display_group'); do_settings_sections('raffall_display_group'); ?>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><label for="raffall_fill_color">Progress fill colour</label></th>
+                        <td><input type="text" id="raffall_fill_color" name="raffall_fill_color" value="<?php echo esc_attr(get_option('raffall_fill_color', '#7b3cff')); ?>" class="regular-text"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="raffall_bg_color">Progress background colour</label></th>
+                        <td><input type="text" id="raffall_bg_color" name="raffall_bg_color" value="<?php echo esc_attr(get_option('raffall_bg_color', '#f1f1f1')); ?>" class="regular-text"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="raffall_flip_bg">Flip tile background</label></th>
+                        <td><input type="text" id="raffall_flip_bg" name="raffall_flip_bg" value="<?php echo esc_attr(get_option('raffall_flip_bg', '#fff')); ?>" class="regular-text"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="raffall_flip_text">Flip tile text colour</label></th>
+                        <td><input type="text" id="raffall_flip_text" name="raffall_flip_text" value="<?php echo esc_attr(get_option('raffall_flip_text', '#222')); ?>" class="regular-text"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Product page: show countdown</th>
+                        <td>
+                            <label><input type="checkbox" name="raffall_show_countdown_product" value="1" <?php checked('1', get_option('raffall_show_countdown_product','1')); ?>> Show countdown on product page</label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Product page: show progress</th>
+                        <td>
+                            <label><input type="checkbox" name="raffall_show_progress_product" value="1" <?php checked('1', get_option('raffall_show_progress_product','1')); ?>> Show progress on product page</label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Product cards: show countdown</th>
+                        <td>
+                            <label><input type="checkbox" name="raffall_show_countdown_cards" value="1" <?php checked('1', get_option('raffall_show_countdown_cards','0')); ?>> Show countdown on product cards / shortcodes</label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Product cards: show progress</th>
+                        <td>
+                            <label><input type="checkbox" name="raffall_show_progress_cards" value="1" <?php checked('1', get_option('raffall_show_progress_cards','0')); ?>> Show progress on product cards / shortcodes</label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Cart sidebar: enable</th>
+                        <td>
+                            <label><input type="checkbox" name="raffall_cart_sidebar_enable" value="1" <?php checked('1', get_option('raffall_cart_sidebar_enable','1')); ?>> Enable cart sidebar by default</label>
+                            <p class="description">When enabled the cart sidebar will be injected into the footer. It remains fully customisable in the frontend.</p>
+                        </td>
+                    </tr>
+                </table>
+                <?php submit_button(); ?>
+            </form>
+        </div>
+        <?php
+    }
+
+    // New admin page: list competitions, export and allocation UI
+    public function render_competitions_page() {
+        if (!current_user_can('manage_options')) return;
+        $competitions = $this->get_competition_products();
+        ?>
+        <div class="wrap">
+            <h1>Raff-all Competitions</h1>
+
+            <h2>Competitions</h2>
+            <p>Export entries, allocate winners, or manually grant site credit.</p>
+
+            <table class="widefat fixed striped">
+                <thead><tr><th>Product</th><th>Draw</th><th>Tickets cap</th><th>Actions</th></tr></thead>
+                <tbody>
+                <?php foreach ($competitions as $p): 
+                    $pid = $p->get_id();
+                    $draw = $p->get_meta('_raff_draw_date');
+                    $cap = $p->get_meta('_raff_ticket_cap');
+                ?>
+                    <tr>
+                        <td><?php echo esc_html($p->get_name()); ?> (ID <?php echo $pid; ?>)</td>
+                        <td><?php echo esc_html($draw ?: 'TBA'); ?></td>
+                        <td><?php echo esc_html($cap ?: '—'); ?></td>
+                        <td>
+                            <!-- Export entries -->
+                            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline-block;margin-right:8px;">
+                                <?php wp_nonce_field('raffall_export_entries_' . $pid, 'raffall_export_nonce'); ?>
+                                <input type="hidden" name="action" value="raffall_export_entries">
+                                <input type="hidden" name="product_id" value="<?php echo esc_attr($pid); ?>">
+                                <button class="button" type="submit">Export CSV</button>
+                            </form>
+
+                            <!-- Allocate winner quick form -->
+                            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline-block;">
+                                <?php wp_nonce_field('raffall_allocate_winner_' . $pid, 'raffall_allocate_nonce'); ?>
+                                <input type="hidden" name="action" value="raffall_allocate_winner">
+                                <input type="hidden" name="product_id" value="<?php echo esc_attr($pid); ?>">
+                                <input type="text" name="ticket_number" placeholder="Ticket #" style="width:90px;margin-right:6px;">
+                                <input type="text" name="winner_name" placeholder="Winner name" style="width:160px;margin-right:6px;">
+                                <input type="email" name="winner_email" placeholder="Email (optional)" style="width:200px;margin-right:6px;">
+                                <label style="margin-right:6px;"><input type="checkbox" name="give_credit" value="1"> Give credit</label>
+                                <input type="number" step="0.01" name="credit_amount" placeholder="Amount" style="width:90px;margin-right:6px;">
+                                <button class="button button-primary" type="submit">Allocate</button>
+                            </form>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+
+            <h2 style="margin-top:24px;">Manual site credit</h2>
+            <p>Grant site credit to a registered user (stored in user meta 'raffall_site_credit').</p>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="max-width:680px;">
+                <?php wp_nonce_field('raffall_grant_site_credit', 'raffall_credit_nonce'); ?>
+                <input type="hidden" name="action" value="raffall_grant_site_credit">
+                <table class="form-table">
+                    <tr><th><label for="rc_email">User email</label></th>
+                        <td><input id="rc_email" name="email" type="email" required class="regular-text"></td></tr>
+                    <tr><th><label for="rc_amount">Amount</label></th>
+                        <td><input id="rc_amount" name="amount" type="number" step="0.01" required class="regular-text" style="width:140px;"></td></tr>
+                </table>
+                <?php submit_button('Grant credit'); ?>
+            </form>
+        </div>
+        <?php
+    }
+
+    // helper: get competition products
+    private function get_competition_products(): array {
+        $items = [];
+        $prods = wc_get_products(['limit' => -1, 'status' => 'publish']);
+        foreach ($prods as $p) {
+            if ($p->get_meta('_raff_is_competition') === 'yes') $items[] = $p;
+        }
+        return $items;
+    }
+
+    // admin POST handler: export CSV of entries for a competition
+    public function admin_export_entries() {
+        if (!current_user_can('manage_options')) wp_die('Forbidden');
+        $pid = isset($_POST['product_id']) ? (int)$_POST['product_id'] : 0;
+        if (!$pid || !check_admin_referer('raffall_export_entries_' . $pid, 'raffall_export_nonce')) {
+            wp_die('Invalid request');
+        }
+
+        // Prepare CSV headers
+        $filename = 'raffall-entries-product-' . $pid . '-' . date('Y-m-d') . '.csv';
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename=' . $filename);
+        $out = fopen('php://output','w');
+        fputcsv($out, ['product_id','product_name','order_id','order_date','user_id','billing_name','billing_email','ticket_numbers','quantity','order_item_id']);
+
+        // Iterate orders and collect items for this product
+        $orders = wc_get_orders(['limit' => -1, 'status' => ['processing','completed','on-hold']]);
+        foreach ($orders as $order) {
+            foreach ($order->get_items('line_item') as $item) {
+                $item_product = $item->get_product();
+                if (!$item_product) continue;
+                if ($item_product->get_id() !== $pid) continue;
+                $item_meta = wc_get_order_item_meta($item->get_id(), '_raff_tickets', true);
+                $tickets = $item_meta ? $item_meta : '';
+                $billing_name = trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name());
+                fputcsv($out, [
+                    $pid,
+                    $item_product->get_name(),
+                    $order->get_id(),
+                    $order->get_date_created() ? $order->get_date_created()->date('Y-m-d H:i:s') : '',
+                    $order->get_user_id(),
+                    $billing_name,
+                    $order->get_billing_email(),
+                    is_array($tickets) ? implode('|', $tickets) : $tickets,
+                    (int)$item->get_quantity(),
+                    $item->get_id()
+                ]);
+            }
+        }
+        fclose($out);
+        exit;
+    }
+
+    // admin POST handler: allocate winner for a competition
+    public function admin_allocate_winner() {
+        if (!current_user_can('manage_options')) wp_die('Forbidden');
+
+        $pid = isset($_POST['product_id']) ? (int)$_POST['product_id'] : 0;
+        if (!$pid || !check_admin_referer('raffall_allocate_winner_' . $pid, 'raffall_allocate_nonce')) {
+            wp_redirect(wp_get_referer() ?: admin_url()); exit;
+        }
+
+        $ticket = isset($_POST['ticket_number']) ? sanitize_text_field($_POST['ticket_number']) : '';
+        $winner_name = isset($_POST['winner_name']) ? sanitize_text_field($_POST['winner_name']) : '';
+        $winner_email = isset($_POST['winner_email']) ? sanitize_email($_POST['winner_email']) : '';
+        $give_credit = isset($_POST['give_credit']) && $_POST['give_credit'] ? true : false;
+        $credit_amount = isset($_POST['credit_amount']) ? floatval($_POST['credit_amount']) : 0.0;
+
+        // create winner post
+        $title = sprintf('Winner: %s - Ticket %s', $winner_name ?: $winner_email ?: 'Winner', $ticket ?: 'N/A');
+        $post_id = wp_insert_post([
+            'post_type' => 'raff_winner',
+            'post_title' => $title,
+            'post_status' => 'publish',
+            'post_content' => '',
+        ]);
+        if ($post_id) {
+            update_post_meta($post_id, 'raff_competition_product_id', $pid);
+            update_post_meta($post_id, 'raff_prize_name', 'Prize'); // admin can edit later
+            update_post_meta($post_id, 'raff_ticket_number', $ticket);
+            update_post_meta($post_id, 'raff_winner_name', $winner_name ?: $winner_email);
+            update_post_meta($post_id, 'raff_consent_public', false);
+
+            $user_id = 0;
+            if ($winner_email) {
+                $user = get_user_by('email', $winner_email);
+                if ($user) {
+                    $user_id = $user->ID;
+                    // optionally add site credit
+                    if ($give_credit && $credit_amount > 0) {
+                        $existing = (float)get_user_meta($user_id, 'raffall_site_credit', true) ?: 0;
+                        $new = $existing + $credit_amount;
+                        update_user_meta($user_id, 'raffall_site_credit', $new);
+                        $this->audit('site_credit_granted', ['user_id' => $user_id, 'amount' => $credit_amount, 'source' => 'admin_allocate_winner', 'product_id' => $pid, 'ticket' => $ticket]);
+                    }
+                }
+            }
+
+            // If there is an instant ledger entry matching this product + ticket, mark claimed and attach order_id/user if possible
+            global $wpdb;
+            $table = $wpdb->prefix . self::INSTANT_TABLE;
+            if (!empty($ticket)) {
+                $wpdb->update($table, [
+                    'claimed' => 1,
+                    'user_id' => $user_id ? $user_id : null,
+                ], [
+                    'product_id' => $pid,
+                    'ticket_number' => $ticket,
+                ]);
+            }
+
+            $this->audit('winner_allocated', ['post_id'=>$post_id,'product_id'=>$pid,'ticket'=>$ticket,'user_id'=>$user_id]);
+        }
+
+        wp_redirect(add_query_arg('raffall_msg','winner_allocated', wp_get_referer() ?: admin_url())); exit;
+    }
+
+    // admin POST handler: grant arbitrary site credit to a user
+    public function admin_grant_site_credit() {
+        if (!current_user_can('manage_options')) wp_die('Forbidden');
+        if (!check_admin_referer('raffall_grant_site_credit', 'raffall_credit_nonce')) {
+            wp_redirect(wp_get_referer() ?: admin_url()); exit;
+        }
+        $email = isset($_POST['email']) ? sanitize_email($_POST['email']) : '';
+        $amount = isset($_POST['amount']) ? floatval($_POST['amount']) : 0.0;
+        if (!$email || $amount <= 0) {
+            wp_redirect(add_query_arg('raffall_msg','invalid', wp_get_referer() ?: admin_url())); exit;
+        }
+        $user = get_user_by('email', $email);
+        if (!$user) {
+            wp_redirect(add_query_arg('raffall_msg','no_user', wp_get_referer() ?: admin_url())); exit;
+        }
+        $uid = $user->ID;
+        $existing = (float)get_user_meta($uid, 'raffall_site_credit', true) ?: 0;
+        $new = $existing + $amount;
+        update_user_meta($uid, 'raffall_site_credit', $new);
+        $this->audit('site_credit_granted', ['user_id' => $uid, 'amount' => $amount, 'source' => 'admin_manual']);
+        wp_redirect(add_query_arg('raffall_msg','credit_granted', wp_get_referer() ?: admin_url())); exit;
+    }
+
     /* Frontend: countdown and progress */
     public function render_countdown_and_progress() {
         global $product;
-        if (!$product || $product->get_meta('_raff_is_competition') !== 'yes') return;
 
-        $draw = $product->get_meta('_raff_draw_date'); // stored as UTC ISO like 2025-12-13T15:00:00Z
-        $cap  = (int) $product->get_meta('_raff_ticket_cap');
-        $stock = $product->get_stock_quantity();
+        // Ensure we have a WC_Product instance (handles cases where $product may be post/ID)
+        $prod = wc_get_product($product);
+        if (!$prod || $prod->get_meta('_raff_is_competition') !== 'yes') return;
+
+        // Respect product page toggles
+        $show_countdown = get_option('raffall_show_countdown_product', '1') === '1';
+        $show_progress  = get_option('raffall_show_progress_product', '1') === '1';
+        if (!$show_countdown && !$show_progress) return;
+
+        $draw = $prod->get_meta('_raff_draw_date'); // stored as UTC ISO like 2025-12-13T15:00:00Z
+        $cap  = (int) $prod->get_meta('_raff_ticket_cap');
+
+        // Normalise stock value to an integer (some product types may return null)
+        $stock_raw = $prod->get_stock_quantity();
+        $stock = is_numeric($stock_raw) ? (int) $stock_raw : 0;
+
         if ($cap < 1) {
-            $next = (int) $product->get_meta('_raff_next_ticket');
+            $next = (int) $prod->get_meta('_raff_next_ticket');
             if ($next < 1) $next = 1;
-            if (is_numeric($stock)) {
+            if (is_numeric($stock_raw)) {
                 $cap = $stock + max(0, $next - 1);
             }
         }
+
         $cap = max(0, $cap);
-        $sold = ($cap > 0) ? max(0, $cap - max(0, (int)$stock)) : 0;
+        $sold = ($cap > 0) ? max(0, $cap - max(0, $stock)) : 0;
         $percent = ($cap > 0) ? round(($sold / $cap) * 100) : 0;
 
         echo '<div class="raff-meta-block" style="margin-bottom:12px;">';
-        if ($draw) {
+        if ($draw && $show_countdown) {
+            // Flip-style countdown structure: each unit has .raff-flip with data-unit
             echo '<div class="raff-countdown" data-draw="' . esc_attr($draw) . '">';
-            echo '<strong>Draw in:</strong> <span class="raff-countdown-timer">Loading…</span>';
+            echo '<div class="raff-flip" data-unit="days"><div class="number"><span class="current">00</span><span class="next">00</span></div><div class="label">Days</div></div>';
+            echo '<div class="raff-flip" data-unit="hours"><div class="number"><span class="current">00</span><span class="next">00</span></div><div class="label">Hours</div></div>';
+            echo '<div class="raff-flip" data-unit="minutes"><div class="number"><span class="current">00</span><span class="next">00</span></div><div class="label">Minutes</div></div>';
+            echo '<div class="raff-flip" data-unit="seconds"><div class="number"><span class="current">00</span><span class="next">00</span></div><div class="label">Seconds</div></div>';
             echo '</div>';
         }
-        if ($cap > 0) {
+        if ($cap > 0 && $show_progress) {
             echo '<div class="raff-progress" aria-label="Tickets sold">';
-            echo '<div class="raff-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' . esc_attr($percent) . '" style="--raff-percent:' . esc_attr($percent) . '%">';
-            echo '<span class="raff-progress-inner" style="width:' . esc_attr($percent) . '%"></span>';
+            echo '<div class="raff-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' . esc_attr($percent) . '" style="--raff-percent:' . esc_attr($percent) . '%; background: var(--raff-bg);">';
+            echo '<span class="raff-progress-inner" style="width:' . esc_attr($percent) . '%; background: linear-gradient(90deg,var(--raff-fill),#3fb1ff);"></span>';
             echo '</div>';
             echo '<div class="raff-progress-text" style="font-size:13px;color:#333;margin-top:6px;">' . esc_html($percent) . '% sold (' . esc_html($sold) . '/' . esc_html($cap) . ')</div>';
             echo '</div>';
@@ -589,6 +1123,21 @@ class RaffAll {
 
     /* Shortcodes */
     public function shortcode_home($atts) {
+        $atts = shortcode_atts([
+            'show_countdown' => null, // null means use global option
+            'show_progress' => null,
+            'fill_color' => null,
+            'bg_color' => null,
+        ], (array)$atts, 'raffall_home');
+
+        // If shortcode overrides colours, inject inline style scoped to this output
+        $inline_style = '';
+        if ($atts['fill_color'] || $atts['bg_color']) {
+            $fill = $atts['fill_color'] ? esc_attr($atts['fill_color']) : get_option('raffall_fill_color', '#7b3cff');
+            $bg   = $atts['bg_color'] ? esc_attr($atts['bg_color']) : get_option('raffall_bg_color', '#f1f1f1');
+            $inline_style = "<style>.raff-home{--raff-fill:{$fill};--raff-bg:{$bg};}</style>";
+        }
+
         $prods = wc_get_products(['limit' => -1, 'status' => 'publish']);
         $competitions = [];
         $instants = [];
@@ -605,6 +1154,7 @@ class RaffAll {
                     'free' => $p->get_meta('_raff_is_free_entry') === 'yes',
                     'url' => get_permalink($p->get_id()),
                     'image' => wp_get_attachment_image_src($p->get_image_id(), 'medium')[0] ?? '',
+                    'product_obj' => $p,
                 ];
                 $competitions[] = $item;
                 if ($item['instant']) $instants[] = $item;
@@ -612,24 +1162,38 @@ class RaffAll {
             }
         }
         ob_start();
+        echo $inline_style;
         echo '<div class="raff-home">';
         echo '<h2>Premium competitions</h2>';
-        $this->render_cards($competitions);
+        $this->render_cards($competitions, false, $atts);
         echo '<h2 style="margin-top:24px;">Instant win prizes</h2>';
-        $this->render_cards($instants);
+        $this->render_cards($instants, false, $atts);
         echo '<h2 style="margin-top:24px;">Free entry prizes</h2>';
-        $this->render_cards($free, true);
+        $this->render_cards($free, true, $atts);
         echo '</div>';
         return ob_get_clean();
     }
 
     public function shortcode_winners($atts) {
+        $atts = shortcode_atts([
+            'fill_color' => null,
+            'bg_color' => null,
+        ], (array)$atts, 'raffall_winners');
+
+        $inline_style = '';
+        if ($atts['fill_color'] || $atts['bg_color']) {
+            $fill = $atts['fill_color'] ? esc_attr($atts['fill_color']) : get_option('raffall_fill_color', '#7b3cff');
+            $bg   = $atts['bg_color'] ? esc_attr($atts['bg_color']) : get_option('raffall_bg_color', '#f1f1f1');
+            $inline_style = "<style>.raff-winners{--raff-fill:{$fill};--raff-bg:{$bg};}</style>";
+        }
+
         $q = new WP_Query([
             'post_type' => 'raff_winner',
             'posts_per_page' => 12,
             'paged' => max(1, get_query_var('paged')),
         ]);
         ob_start();
+        echo $inline_style;
         echo '<div class="raff-winners">';
         echo '<h2>Recent Winners</h2>';
         if ($q->have_posts()) {
@@ -660,7 +1224,15 @@ class RaffAll {
         return ob_get_clean();
     }
 
-    private function render_cards(array $items, bool $show_free_info = false) {
+    private function render_cards(array $items, bool $show_free_info = false, array $opts = []) {
+        // opts can override global options: show_countdown, show_progress, fill_color, bg_color
+        $show_countdown_cards = array_key_exists('show_countdown', $opts) && $opts['show_countdown'] !== null
+            ? (bool)$opts['show_countdown']
+            : (get_option('raffall_show_countdown_cards','0') === '1');
+        $show_progress_cards = array_key_exists('show_progress', $opts) && $opts['show_progress'] !== null
+            ? (bool)$opts['show_progress']
+            : (get_option('raffall_show_progress_cards','0') === '1');
+
         if (empty($items)) { echo '<p>No items available.</p>'; return; }
         echo '<div class="raff-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;">';
         foreach ($items as $it) {
@@ -670,121 +1242,50 @@ class RaffAll {
             echo '<h3 style="margin:0 0 6px;">' . esc_html($it['name']) . '</h3>';
             echo '<p style="margin:0 0 8px;">Draw: ' . esc_html($it['draw'] ?: 'TBA') . '</p>';
             echo '<p style="margin:0 0 8px;">Price: ' . wc_price($it['price']) . '</p>';
+
+            // Optionally include countdown on product cards
+            if ($show_countdown_cards && !empty($it['draw'])) {
+                echo '<div class="raff-countdown" data-draw="' . esc_attr($it['draw']) . '" style="margin-bottom:8px;">';
+                echo '<div class="raff-flip" data-unit="days"><div class="number"><span class="current">00</span><span class="next">00</span></div><div class="label">Days</div></div>';
+                echo '<div class="raff-flip" data-unit="hours"><div class="number"><span class="current">00</span><span class="next">00</span></div><div class="label">Hours</div></div>';
+                echo '<div class="raff-flip" data-unit="minutes"><div class="number"><span class="current">00</span><span class="next">00</span></div><div class="label">Minutes</div></div>';
+                echo '<div class="raff-flip" data-unit="seconds"><div class="number"><span class="current">00</span><span class="next">00</span></div><div class="label">Seconds</div></div>';
+                echo '</div>';
+            }
+
             echo '<a class="button" href="' . esc_url($it['url']) . '">View competition</a>';
+            if ($show_progress_cards) {
+                // compute percent using product if available
+                $percent = 0; $sold = 0; $cap = 0;
+                if (!empty($it['product_obj']) && is_object($it['product_obj'])) {
+                    $p = $it['product_obj'];
+                    $cap = (int)$p->get_meta('_raff_ticket_cap');
+                    $stock = $p->get_stock_quantity();
+                    if ($cap < 1) {
+                        $next = (int)$p->get_meta('_raff_next_ticket');
+                        if ($next < 1) $next = 1;
+                        if (is_numeric($stock)) $cap = $stock + max(0, $next - 1);
+                    }
+                    $cap = max(0,$cap);
+                    $sold = ($cap > 0) ? max(0, $cap - max(0, (int)$stock)) : 0;
+                    $percent = ($cap > 0) ? round(($sold / $cap) * 100) : 0;
+                }
+                if ($cap > 0) {
+                    echo '<div class="raff-progress" aria-label="Tickets sold" style="margin-top:8px;">';
+                    echo '<div class="raff-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' . esc_attr($percent) . '" style="--raff-percent:' . esc_attr($percent) . '%; background: var(--raff-bg);">';
+                    echo '<span class="raff-progress-inner" style="width:' . esc_attr($percent) . '%; background: linear-gradient(90deg,var(--raff-fill),#3fb1ff);"></span>';
+                    echo '</div>';
+                    echo '<div class="raff-progress-text" style="font-size:13px;color:#333;margin-top:6px;">' . esc_html($percent) . '% sold (' . esc_html($sold) . '/' . esc_html($cap) . ')</div>';
+                    echo '</div>';
+                }
+            }
+
             if ($show_free_info) echo '<p style="font-size:12px;color:#666;margin-top:8px;">Free entry available via postal method with parity limits.</p>';
             echo '</div></div>';
         }
         echo '</div>';
     }
 
-    /* GDPR anonymization */
-    public function gdpr_anonymize_job() {
-        $threshold = (new DateTimeImmutable('-2 years'))->format('Y-m-d H:i:s');
-        $this->anonymize_users_before($threshold);
-        $this->anonymize_guest_orders_before($threshold);
-    }
-
-    private function anonymize_users_before(string $datetime) {
-        global $wpdb;
-        $users = get_users([
-            'fields' => ['ID'],
-            'meta_query' => [
-                'relation' => 'OR',
-                ['key' => 'raff_retain_personal_data', 'compare' => 'NOT EXISTS'],
-                ['key' => 'raff_retain_personal_data', 'value' => 'yes', 'compare' => '!='],
-            ]
-        ]);
-        foreach ($users as $u) {
-            $last_order = $wpdb->get_var($wpdb->prepare("
-                SELECT MAX(post_date) FROM {$wpdb->posts}
-                WHERE post_type='shop_order' AND post_author=%d
-            ", $u->ID));
-            if ($last_order && $last_order > $datetime) continue;
-
-            update_user_meta($u->ID, 'first_name', '');
-            update_user_meta($u->ID, 'last_name', '');
-            update_user_meta($u->ID, 'billing_first_name', '');
-            update_user_meta($u->ID, 'billing_last_name', '');
-            update_user_meta($u->ID, 'billing_address_1', '');
-            update_user_meta($u->ID, 'billing_city', '');
-            update_user_meta($u->ID, 'billing_postcode', '');
-            update_user_meta($u->ID, 'billing_phone', '');
-            update_user_meta($u->ID, 'raff_email_hash', wp_hash(get_userdata($u->ID)->user_email));
-            $this->audit('gdpr_user_anonymized', ['user_id' => $u->ID]);
-        }
-    }
-
-    private function anonymize_guest_orders_before(string $datetime) {
-        global $wpdb;
-        $orders = $wpdb->get_results($wpdb->prepare("
-            SELECT ID FROM {$wpdb->posts}
-            WHERE post_type='shop_order' AND post_date < %s
-        ", $datetime));
-        foreach ($orders as $o) {
-            $order = wc_get_order($o->ID);
-            if (!$order) continue;
-            if ($order->get_user_id()) continue;
-
-            $order->set_billing_first_name('');
-            $order->set_billing_last_name('');
-            $order->set_billing_address_1('');
-            $order->set_billing_city('');
-            $order->set_billing_postcode('');
-            $order->set_billing_phone('');
-            $order->save();
-            $this->audit('gdpr_guest_order_anonymized', ['order_id' => $o->ID]);
-        }
-    }
-
-    /* Audit logging */
-    private function audit(string $event, array $ctx = []) {
-        try {
-            global $wpdb;
-            $table = $wpdb->prefix . self::AUDIT_TABLE;
-            $wpdb->insert($table, [
-                'event_type' => $event,
-                'context' => wp_json_encode($ctx, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                'user_id' => get_current_user_id() ?: null,
-                'order_id' => $ctx['order_id'] ?? null,
-                'product_id' => $ctx['product_id'] ?? null,
-                'created_at' => current_time('mysql'),
-            ]);
-        } catch (\Throwable $e) {
-            // ignore
-        }
-    }
-
-    private function mask(string $s): string {
-        if (strlen($s) <= 2) return '*';
-        return substr($s,0,1) . str_repeat('*', max(1, strlen($s)-2)) . substr($s,-1);
-    }
-
-    /* Enqueue assets */
-    public function enqueue_raff_frontend_assets() {
-        wp_register_script('raffall-frontend', plugin_dir_url(__FILE__) . 'assets/raffall-frontend.js', ['jquery'], self::VERSION, true);
-        wp_enqueue_script('raffall-frontend');
-        wp_register_style('raffall-frontend-css', plugin_dir_url(__FILE__) . 'assets/raffall-frontend.css', [], self::VERSION);
-        wp_enqueue_style('raffall-frontend-css');
-    }
-
-    /* Admin assets for Flatpickr timezone picker */
-    public function enqueue_raff_admin_assets($hook) {
-        if (!in_array($hook, ['post.php', 'post-new.php'], true)) return;
-        $screen = get_current_screen();
-        if ($screen && $screen->post_type !== 'product') return;
-
-        wp_enqueue_style('flatpickr-css', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css', [], self::VERSION);
-        wp_enqueue_script('flatpickr-js', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js', [], self::VERSION, true);
-
-        wp_register_script('raffall-admin-draw', plugin_dir_url(__FILE__) . 'assets/admin-raff-draw.js', ['jquery', 'flatpickr-js'], self::VERSION, true);
-        wp_enqueue_script('raffall-admin-draw');
-
-        $tzs = timezone_identifiers_list();
-        wp_localize_script('raffall-admin-draw', 'raffAllAdminData', [
-            'timezones' => $tzs,
-        ]);
-    }
-}
+} // end class RaffAll
 
 new RaffAll();
-
