@@ -18,6 +18,14 @@ class RaffAll {
         register_activation_hook(__FILE__, [$this, 'activate']);
         register_deactivation_hook(__FILE__, [$this, 'deactivate']);
 
+        // Bail early if WooCommerce is not active to avoid fatal errors.
+        // Activation/deactivation still registered above.
+        if (!class_exists('WooCommerce')) {
+            add_action('admin_notices', [$this, 'woocommerce_missing_notice']);
+            // Do not register WooCommerce-dependent hooks
+            return;
+        }
+
         add_action('init', [$this, 'register_winner_cpt']);
         add_action('woocommerce_product_options_general_product_data', [$this, 'product_fields']);
         add_action('woocommerce_admin_process_product_object', [$this, 'save_product_fields']);
@@ -399,20 +407,21 @@ class RaffAll {
 
     /* Enqueue assets */
     public function enqueue_raff_frontend_assets() {
+        // Avoid calling WooCommerce helpers if WooCommerce is not present.
+        $has_wc = function_exists('wc_get_cart_url') && function_exists('wc_get_checkout_url');
         wp_register_script('raffall-frontend', plugin_dir_url(__FILE__) . 'assets/raffall-frontend.js', ['jquery'], self::VERSION, true);
         wp_register_style('raffall-frontend-css', plugin_dir_url(__FILE__) . 'assets/raffall-frontend.css', [], self::VERSION);
         wp_register_script('raffall-cart-sidebar', plugin_dir_url(__FILE__) . 'assets/raffall-cart-sidebar.js', ['jquery'], self::VERSION, true);
         wp_register_style('raffall-cart-sidebar-css', plugin_dir_url(__FILE__) . 'assets/raffall-cart-sidebar.css', [], self::VERSION);
 
-        // enqueue both so sidebar is functional when enabled
         wp_enqueue_script('raffall-cart-sidebar');
         wp_enqueue_style('raffall-cart-sidebar-css');
 
-        // localize defaults and urls
+        // localize defaults and urls (guard wc helpers)
         $sidebar_defaults = [
             'enabled' => get_option('raffall_cart_sidebar_enable', '1') === '1',
-            'cart_url' => wc_get_cart_url(),
-            'checkout_url' => wc_get_checkout_url(),
+            'cart_url' => $has_wc ? wc_get_cart_url() : home_url('/cart/'),
+            'checkout_url' => $has_wc ? wc_get_checkout_url() : home_url('/checkout/'),
             'strings' => [
                 'title' => __('Your cart','raffall'),
                 'view_cart' => __('View cart','raffall'),
@@ -449,6 +458,11 @@ class RaffAll {
     }
 
     private function get_cart_sidebar_markup() : string {
+        // Return nothing if no WooCommerce/cart available to avoid WP fatal errors
+        if (!function_exists('WC') || !WC() || !method_exists('WC','cart') || !WC()->cart) {
+            return '';
+        }
+
         ob_start();
         $cart = WC()->cart ?? null;
         $items = $cart ? $cart->get_cart() : [];
@@ -559,54 +573,54 @@ class RaffAll {
             <form method="post" action="options.php">
                 <?php settings_fields('raffall_display_group'); do_settings_sections('raffall_display_group'); ?>
                 <table class="form-table">
-                    <tr>
-                        <th scope="row"><label for="raffall_fill_color">Progress fill colour</label></th>
-                        <td><input type="text" id="raffall_fill_color" name="raffall_fill_color" value="<?php echo esc_attr(get_option('raffall_fill_color', '#7b3cff')); ?>" class="regular-text"></td>
-                    </tr>
-                    <tr>
-                        <th scope="row"><label for="raffall_bg_color">Progress background colour</label></th>
-                        <td><input type="text" id="raffall_bg_color" name="raffall_bg_color" value="<?php echo esc_attr(get_option('raffall_bg_color', '#f1f1f1')); ?>" class="regular-text"></td>
-                    </tr>
-                    <tr>
-                        <th scope="row"><label for="raffall_flip_bg">Flip tile background</label></th>
-                        <td><input type="text" id="raffall_flip_bg" name="raffall_flip_bg" value="<?php echo esc_attr(get_option('raffall_flip_bg', '#fff')); ?>" class="regular-text"></td>
-                    </tr>
-                    <tr>
-                        <th scope="row"><label for="raffall_flip_text">Flip tile text colour</label></th>
-                        <td><input type="text" id="raffall_flip_text" name="raffall_flip_text" value="<?php echo esc_attr(get_option('raffall_flip_text', '#222')); ?>" class="regular-text"></td>
-                    </tr>
-                    <tr>
-                        <th scope="row">Product page: show countdown</th>
-                        <td>
-                            <label><input type="checkbox" name="raffall_show_countdown_product" value="1" <?php checked('1', get_option('raffall_show_countdown_product','1')); ?>> Show countdown on product page</label>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">Product page: show progress</th>
-                        <td>
-                            <label><input type="checkbox" name="raffall_show_progress_product" value="1" <?php checked('1', get_option('raffall_show_progress_product','1')); ?>> Show progress on product page</label>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">Product cards: show countdown</th>
-                        <td>
-                            <label><input type="checkbox" name="raffall_show_countdown_cards" value="1" <?php checked('1', get_option('raffall_show_countdown_cards','0')); ?>> Show countdown on product cards / shortcodes</label>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">Product cards: show progress</th>
-                        <td>
-                            <label><input type="checkbox" name="raffall_show_progress_cards" value="1" <?php checked('1', get_option('raffall_show_progress_cards','0')); ?>> Show progress on product cards / shortcodes</label>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">Cart sidebar: enable</th>
-                        <td>
-                            <label><input type="checkbox" name="raffall_cart_sidebar_enable" value="1" <?php checked('1', get_option('raffall_cart_sidebar_enable','1')); ?>> Enable cart sidebar by default</label>
-                            <p class="description">When enabled the cart sidebar will be injected into the footer. It remains fully customisable in the frontend.</p>
-                        </td>
-                    </tr>
-                </table>
+                                <tr>
+                                    <th scope="row"><label for="raffall_fill_color">Progress fill colour</label></th>
+                                    <td><input type="text" id="raffall_fill_color" name="raffall_fill_color" value="<?php echo esc_attr(get_option('raffall_fill_color', '#7b3cff')); ?>" class="regular-text"></td>
+                                </tr>
+                                <tr>
+                                    <th scope="row"><label for="raffall_bg_color">Progress background colour</label></th>
+                                    <td><input type="text" id="raffall_bg_color" name="raffall_bg_color" value="<?php echo esc_attr(get_option('raffall_bg_color', '#f1f1f1')); ?>" class="regular-text"></td>
+                                </tr>
+                                <tr>
+                                    <th scope="row"><label for="raffall_flip_bg">Flip tile background</label></th>
+                                    <td><input type="text" id="raffall_flip_bg" name="raffall_flip_bg" value="<?php echo esc_attr(get_option('raffall_flip_bg', '#fff')); ?>" class="regular-text"></td>
+                                </tr>
+                                <tr>
+                                    <th scope="row"><label for="raffall_flip_text">Flip tile text colour</label></th>
+                                    <td><input type="text" id="raffall_flip_text" name="raffall_flip_text" value="<?php echo esc_attr(get_option('raffall_flip_text', '#222')); ?>" class="regular-text"></td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Product page: show countdown</th>
+                                    <td>
+                                        <label><input type="checkbox" name="raffall_show_countdown_product" value="1" <?php checked('1', get_option('raffall_show_countdown_product','1')); ?>> Show countdown on product page</label>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Product page: show progress</th>
+                                    <td>
+                                        <label><input type="checkbox" name="raffall_show_progress_product" value="1" <?php checked('1', get_option('raffall_show_progress_product','1')); ?>> Show progress on product page</label>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Product cards: show countdown</th>
+                                    <td>
+                                        <label><input type="checkbox" name="raffall_show_countdown_cards" value="1" <?php checked('1', get_option('raffall_show_countdown_cards','0')); ?>> Show countdown on product cards / shortcodes</label>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Product cards: show progress</th>
+                                    <td>
+                                        <label><input type="checkbox" name="raffall_show_progress_cards" value="1" <?php checked('1', get_option('raffall_show_progress_cards','0')); ?>> Show progress on product cards / shortcodes</label>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Cart sidebar: enable</th>
+                                    <td>
+                                        <label><input type="checkbox" name="raffall_cart_sidebar_enable" value="1" <?php checked('1', get_option('raffall_cart_sidebar_enable','1')); ?>> Enable cart sidebar by default</label>
+                                        <p class="description">When enabled the cart sidebar will be injected into the footer. It remains fully customisable in the frontend.</p>
+                                    </td>
+                                </tr>
+                            </table>
                 <?php submit_button(); ?>
             </form>
         </div>
@@ -1123,6 +1137,11 @@ class RaffAll {
 
     /* Shortcodes */
     public function shortcode_home($atts) {
+        // Guard if WooCommerce not available
+        if (!function_exists('wc_get_products')) {
+            return '<p>Premium competitions are unavailable because WooCommerce is not active.</p>';
+        }
+
         $atts = shortcode_atts([
             'show_countdown' => null, // null means use global option
             'show_progress' => null,
@@ -1284,6 +1303,17 @@ class RaffAll {
             echo '</div></div>';
         }
         echo '</div>';
+    }
+
+    // Admin notice when WooCommerce is not active
+    public function woocommerce_missing_notice() {
+        if (!current_user_can('activate_plugins')) return;
+        $install_url = esc_url(self_admin_url('plugin-install.php?tab=search&s=WooCommerce'));
+        $plugins_url = esc_url(admin_url('plugins.php'));
+        echo '<div class="notice notice-error"><p>';
+        echo 'Raff-all Premium Competitions requires <strong>WooCommerce</strong>. Please install and activate WooCommerce. ';
+        echo '<a href="' . $install_url . '">Install WooCommerce</a> or go to <a href="' . $plugins_url . '">Plugins</a>.';
+        echo '</p></div>';
     }
 
 } // end class RaffAll
