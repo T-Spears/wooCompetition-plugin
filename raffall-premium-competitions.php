@@ -9,6 +9,14 @@
 
 if (!defined('ABSPATH')) exit;
 
+// Expose plugin file and base URL constants for includes to build asset URLs reliably
+if (!defined('RAFFALL_PLUGIN_FILE')) {
+	define('RAFFALL_PLUGIN_FILE', __FILE__);
+}
+if (!defined('RAFFALL_PLUGIN_URL')) {
+	define('RAFFALL_PLUGIN_URL', plugin_dir_url(RAFFALL_PLUGIN_FILE));
+}
+
 // Load feature files (each feature isolated)
 require_once __DIR__ . '/includes/activation.php';
 require_once __DIR__ . '/includes/audit.php';

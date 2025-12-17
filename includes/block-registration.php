@@ -3,27 +3,30 @@ if (!defined('ABSPATH')) exit;
 
 add_action('init', 'raffall_register_block_assets');
 function raffall_register_block_assets() {
-	// register editor script and block styles (depends on wp-api-fetch for REST)
-	wp_register_script(
-		'raffall-block-editor',
-		plugin_dir_url(__DIR__) . 'assets/blocks/raffall-block.js',
-		['wp-blocks','wp-element','wp-components','wp-editor','wp-i18n','wp-api-fetch'],
-		filemtime(plugin_dir_path(__DIR__) . 'assets/blocks/raffall-block.js'),
-		true
-	);
-	wp_register_style(
-		'raffall-block-style',
-		plugin_dir_url(__DIR__) . 'assets/blocks/raffall-block.css',
-		[],
-		filemtime(plugin_dir_path(__DIR__) . 'assets/blocks/raffall-block.css')
-	);
+    $block_js  = RAFFALL_PLUGIN_URL . 'assets/blocks/raffall-block.js';
+    $block_css = RAFFALL_PLUGIN_URL . 'assets/blocks/raffall-block.css';
 
-	register_block_type('woo-competitions/card', [
-		'editor_script' => 'raffall-block-editor',
-		'editor_style'  => 'raffall-block-style',
-		'style'         => 'raffall-block-style',
-		'render_callback' => 'raffall_render_block_card'
-	]);
+    // register editor script and block styles (depends on wp-api-fetch for REST)
+    wp_register_script(
+        'raffall-block-editor',
+        $block_js,
+        ['wp-blocks','wp-element','wp-components','wp-editor','wp-i18n','wp-api-fetch'],
+        filemtime(plugin_dir_path(__DIR__) . '/assets/blocks/raffall-block.js'),
+        true
+    );
+    wp_register_style(
+        'raffall-block-style',
+        $block_css,
+        [],
+        filemtime(plugin_dir_path(__DIR__) . '/assets/blocks/raffall-block.css')
+    );
+
+    register_block_type('woo-competitions/card', [
+        'editor_script' => 'raffall-block-editor',
+        'editor_style'  => 'raffall-block-style',
+        'style'         => 'raffall-block-style',
+        'render_callback' => 'raffall_render_block_card'
+    ]);
 }
 
 // REST endpoint to return competition products with search & per_page
