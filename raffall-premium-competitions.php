@@ -18,14 +18,24 @@ class RaffAll {
         register_activation_hook(__FILE__, [$this, 'activate']);
         register_deactivation_hook(__FILE__, [$this, 'deactivate']);
 
-        // Bail early if WooCommerce is not active to avoid fatal errors.
-        // Activation/deactivation still registered above.
+        // Defer WooCommerce-dependent initialization until plugins have loaded.
+        add_action('plugins_loaded', [$this, 'maybe_init']);
+    }
+
+    // Called on plugins_loaded to check for WooCommerce and initialise plugin hooks.
+    public function maybe_init() {
         if (!class_exists('WooCommerce')) {
+            // Show admin notice for users who can activate plugins
             add_action('admin_notices', [$this, 'woocommerce_missing_notice']);
-            // Do not register WooCommerce-dependent hooks
             return;
         }
 
+        // WooCommerce is available — register all hooks that depend on it.
+        $this->init_hooks();
+    }
+
+    // Register all hooks/filters/actions that require WooCommerce (moved from constructor).
+    private function init_hooks() {
         add_action('init', [$this, 'register_winner_cpt']);
         add_action('woocommerce_product_options_general_product_data', [$this, 'product_fields']);
         add_action('woocommerce_admin_process_product_object', [$this, 'save_product_fields']);
