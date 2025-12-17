@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WooCompetitions
  * Description: Competitions via WooCommerce: validation question gate (3-option), ticket allocation, instant wins, winners page, audit logging, GDPR auto-anonymization (2 years), countdown and percent sold bar, Flatpickr admin picker with timezone.
- * Version: 1.3.2
+ * Version: 1.3.4
  * Author: Tai Spears (SpearsTech)
  * Requires PHP: 8.0
  */
@@ -17,6 +17,7 @@ require_once __DIR__ . '/includes/product-fields.php';
 require_once __DIR__ . '/includes/admin-assets.php';
 require_once __DIR__ . '/includes/admin-pages.php';
 require_once __DIR__ . '/includes/frontend-assets.php';
+require_once __DIR__ . '/includes/frontend-display.php'; // <-- new include
 require_once __DIR__ . '/includes/cart-sidebar.php';
 require_once __DIR__ . '/includes/shortcodes.php';
 require_once __DIR__ . '/includes/account.php';
@@ -26,7 +27,7 @@ require_once __DIR__ . '/includes/validation.php';
 require_once __DIR__ . '/includes/block-registration.php';
 
 class RaffAll {
-    const VERSION = '1.3.2';
+    const VERSION = '1.3.4';
     const AUDIT_TABLE = 'raffall_audit';
     const INSTANT_TABLE = 'raffall_instant_ledger';
 
@@ -116,6 +117,24 @@ class RaffAll {
         echo 'Raff-all Premium Competitions requires <strong>WooCommerce</strong>. Please install and activate WooCommerce. ';
         echo '<a href="' . $install_url . '">Install WooCommerce</a> or go to <a href="' . $plugins_url . '">Plugins</a>.';
         echo '</p></div>';
+    }
+
+    // Compatibility wrapper: some hooks may still reference [$this,'enqueue_raff_admin_assets']
+    // Keep a thin method that delegates to the procedural function if present.
+    public function enqueue_raff_admin_assets($hook = '') {
+        if (function_exists('raffall_enqueue_admin_assets')) {
+            return raffall_enqueue_admin_assets($hook);
+        }
+        // no-op fallback
+        return null;
+    }
+
+    // Compatibility wrapper in case a class method callback is registered for countdown rendering.
+    public function render_countdown_and_progress() {
+        if (function_exists('raffall_render_countdown_and_progress')) {
+            return raffall_render_countdown_and_progress();
+        }
+        return null;
     }
 } // end class RaffAll
 
