@@ -456,6 +456,41 @@ class RaffAll {
         wp_add_inline_style('raffall-frontend-css', $vars);
     }
 
+    /* Enqueue admin assets for product editor (Flatpickr + timezone) */
+    public function enqueue_raff_admin_assets($hook = '') {
+        // Only load on product edit/add screens (Products > Add New / Edit)
+        if (!is_admin()) return;
+        if (!in_array($hook, ['post.php', 'post-new.php'], true)) return;
+
+        // Ensure we are on the product post type screen
+        if (function_exists('get_current_screen')) {
+            $screen = get_current_screen();
+            if (!$screen || ($screen->post_type ?? '') !== 'product') return;
+        }
+
+        // Register & enqueue Flatpickr first (CDN) so admin script can use it
+        wp_register_script('raffall-flatpickr-js', 'https://cdn.jsdelivr.net/npm/flatpickr', [], '4.6.13', true);
+        wp_register_style('raffall-flatpickr-css', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css', [], '4.6.13');
+        wp_enqueue_script('raffall-flatpickr-js');
+        wp_enqueue_style('raffall-flatpickr-css');
+
+        // Admin initializer that populates timezone select and initialises flatpickr
+        wp_register_script(
+            'raffall-admin-draw',
+            plugin_dir_url(__FILE__) . 'assets/admin-raff-draw.js',
+            ['jquery', 'raffall-flatpickr-js'], // depend on flatpickr
+            self::VERSION,
+            true
+        );
+        wp_enqueue_script('raffall-admin-draw');
+
+        // Localize timezone identifiers for the admin script
+        $tzs = function_exists('timezone_identifiers_list') ? timezone_identifiers_list() : [];
+        wp_localize_script('raffall-admin-draw', 'raffAllAdminData', [
+            'timezones' => $tzs,
+        ]);
+    }
+
     /* Cart sidebar output helpers */
     public function render_cart_sidebar() {
         // echo sidebar only when enabled
