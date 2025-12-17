@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WooCompetitions
  * Description: Competitions via WooCommerce: validation question gate (3-option), ticket allocation, instant wins, winners page, audit logging, GDPR auto-anonymization (2 years), countdown and percent sold bar, Flatpickr admin picker with timezone.
- * Version: 1.3.0
+ * Version: 1.3.1
  * Author: Tai Spears (SpearsTech)
  * Requires PHP: 8.0
  */
