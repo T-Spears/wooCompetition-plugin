@@ -17,9 +17,55 @@ function ready(fn) {
 
 function pad(n) { return String(n).padStart(2, '0'); }
 
+/**
+ * Parse a variety of draw string formats into a Date object.
+ * Accepts:
+ * - ISO with timezone (2025-12-13T15:00:00Z or 2025-12-13T15:00:00+01:00)
+ * - ISO without timezone (2025-12-13T15:00:00) -> treated as UTC
+ * - "YYYY-MM-DD HH:MM" -> treated as UTC
+ * - Date only "YYYY-MM-DD" -> treated as end of day UTC
+ * Returns a Date or null.
+ */
+function parseDrawToDate(draw) {
+    if (!draw) return null;
+    var s = String(draw).trim();
+
+    // Quick native parse attempt (handles ISO with timezone)
+    var d = new Date(s);
+    if (!isNaN(d)) return d;
+
+    // "YYYY-MM-DD HH:MM(:SS)?" -> convert to YYYY-MM-DDTHH:MM(:SS)Z
+    if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(:\d{2})?$/.test(s)) {
+        try {
+            return new Date(s.replace(/\s+/, 'T') + 'Z');
+        } catch (e) { /* fallthrough */ }
+    }
+
+    // ISO without timezone: "YYYY-MM-DDTHH:MM(:SS)?" -> append Z to treat as UTC
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(s)) {
+        try {
+            return new Date(s + 'Z');
+        } catch (e) { /* fallthrough */ }
+    }
+
+    // Date only "YYYY-MM-DD" -> use end of day UTC
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        try {
+            return new Date(s + 'T23:59:59Z');
+        } catch (e) { /* fallthrough */ }
+    }
+
+    // Last attempt: let Date try again; if invalid return null
+    d = new Date(s);
+    return isNaN(d) ? null : d;
+}
+
 function calcRemaining(drawIso) {
     var now = new Date();
-    var draw = new Date(drawIso);
+    var draw = parseDrawToDate(drawIso);
+    if (!draw || isNaN(draw)) {
+        return { days: 0, hours: 0, minutes: 0, seconds: 0, totalMs: 0 };
+    }
     var diff = Math.max(0, draw - now); // ms
     var secs = Math.floor(diff / 1000);
     var days = Math.floor(secs / 86400); secs -= days * 86400;

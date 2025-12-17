@@ -22,7 +22,8 @@ function raffall_render_validation_question() {
         return;
     }
 
-    $style = get_option('raffall_question_style', 'radios'); // radios | buttons | dropdown
+    // Prefer per-product style if set, otherwise fall back to global option
+    $style = $product->get_meta('_raff_question_style') ?: get_option('raffall_question_style', 'radios');
 
     echo '<fieldset class="raff-validation raff-validation--' . esc_attr($style) . '" style="margin-bottom:12px;border:0;padding:0;">';
     echo '<legend style="font-weight:600;margin-bottom:6px;">' . esc_html($q) . '</legend>';
@@ -44,16 +45,12 @@ function raffall_render_validation_question() {
     } elseif ($style === 'buttons') {
         // Render accessible button group + hidden input AND hidden radio inputs for robust submission
         echo '<div class="raff-question-buttons-wrapper">';
-        // hidden input used as simple canonical value (keeps legacy JS working)
         echo '<input type="hidden" name="raff_choice" class="raff-choice-hidden" value="">';
-
-        // Hidden radios (kept in DOM for progressive enhancement / form submission)
         foreach ($opts as $idx => $label) {
             if (empty($label)) continue;
             $rid = 'raff_choice_radio_' . $idx;
-            echo '<input type="radio" id="' . esc_attr($rid) . '" name="raff_choice" value="' . esc_attr($idx) . '" class="raff-hidden-radio" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;" />';
+            echo '<input type="radio" id="' . esc_attr($rid) . '" name="raff_choice" value="' . esc_attr($idx) . '" class="raff-hidden-radio" />';
         }
-
         echo '<div class="raff-question-buttons" role="radiogroup" aria-label="' . esc_attr($q) . '">';
         foreach ($opts as $idx => $label) {
             if (empty($label)) continue;

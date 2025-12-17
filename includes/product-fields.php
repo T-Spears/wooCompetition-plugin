@@ -23,6 +23,62 @@ function raffall_product_fields() {
 		echo '</div>';
 	}
 
+	// Multiple-choice validation question (3 options)
+	woocommerce_wp_text_input([
+		'id' => '_raff_validation_question',
+		'label' => 'Validation question',
+		'desc_tip' => true,
+		'description' => 'Skill-based multiple-choice question displayed before add to cart.',
+		'type' => 'text',
+	]);
+	woocommerce_wp_text_input([
+		'id' => '_raff_validation_option_1',
+		'label' => 'Option 1',
+		'desc_tip' => true,
+		'description' => 'First answer option (visible to customers).',
+		'type' => 'text',
+	]);
+	woocommerce_wp_text_input([
+		'id' => '_raff_validation_option_2',
+		'label' => 'Option 2',
+		'desc_tip' => true,
+		'description' => 'Second answer option (visible to customers).',
+		'type' => 'text',
+	]);
+	woocommerce_wp_text_input([
+		'id' => '_raff_validation_option_3',
+		'label' => 'Option 3',
+		'desc_tip' => true,
+		'description' => 'Third answer option (visible to customers).',
+		'type' => 'text',
+	]);
+	woocommerce_wp_select([
+		'id' => '_raff_validation_correct_option',
+		'label' => 'Correct option',
+		'desc_tip' => true,
+		'description' => 'Select which option is the correct answer.',
+		'options' => [
+			''  => '— Select correct option —',
+			'1' => 'Option 1',
+			'2' => 'Option 2',
+			'3' => 'Option 3',
+		],
+	]);
+
+	// Per-product presentation style for the validation question
+	woocommerce_wp_select([
+		'id' => '_raff_question_style',
+		'label' => 'Question style',
+		'desc_tip' => true,
+		'description' => 'Per-product override for how the validation question is presented (falls back to global setting if empty).',
+		'options' => [
+			''        => 'Use global setting',
+			'radios'  => 'Radios',
+			'buttons' => 'Clickable buttons',
+			'dropdown'=> 'Dropdown',
+		],
+	]);
+
 	// render validation inputs (question + options) - existing markup remains
 	// ...
 
@@ -56,6 +112,7 @@ function raffall_save_product_fields($product) {
 		'_raff_validation_option_2' => 'text',
 		'_raff_validation_option_3' => 'text',
 		'_raff_validation_correct_option' => 'text',
+		'_raff_question_style' => 'text', // <-- save per-product style
 		'_raff_instant_seed_csv' => 'textarea',
 		'_raff_next_ticket' => 'number',
 		'_raff_ticket_cap' => 'number',

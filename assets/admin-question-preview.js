@@ -18,6 +18,15 @@
       ].filter(Boolean);
     }
 
+    function getStyle() {
+      // prefer per-product meta select, then fall back to global setting (select id raffall_question_style)
+      var p = document.getElementById('_raff_question_style');
+      if (p && p.value) return p.value;
+      var g = document.getElementById('raffall_question_style');
+      if (g && g.value) return g.value;
+      return (window.raffAllPreviewData && window.raffAllPreviewData.style) || 'radios';
+    }
+
     // Apply CSS variables from localized preview data to preview root's parent so styles pick them up
     var previewContainer = document.getElementById('raffall-question-preview');
     if (previewContainer && window.raffAllPreviewData) {
@@ -29,7 +38,7 @@
     function renderPreview() {
       var qtext = getField('_raff_validation_question') || 'Sample question: Which option is correct?';
       var options = readOptions();
-      var style = (document.querySelector('#raffall_question_style') ? document.querySelector('#raffall_question_style').value : (window.raffAllPreviewData && window.raffAllPreviewData.style)) || 'radios';
+      var style = getStyle();
 
       // Build markup according to style
       var html = '<div class="raff-preview-question" style="margin-bottom:8px;font-weight:600;">' + escapeHtml(qtext) + '</div>';
@@ -64,7 +73,7 @@
     }
 
     // Wire events: update preview when admin edits question/options/style
-    var inputs = ['_raff_validation_question','_raff_validation_option_1','_raff_validation_option_2','_raff_validation_option_3'];
+    var inputs = ['_raff_validation_question','_raff_validation_option_1','_raff_validation_option_2','_raff_validation_option_3','_raff_question_style'];
     inputs.forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.addEventListener('input', renderPreview);
