@@ -1,0 +1,44 @@
+.raff-validation { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+.raff-validation .raff-question-buttons { display:flex; gap:8px; flex-wrap:wrap; }
+/* use CSS variables injected from PHP */
+.raff-question-btn {
+  background: var(--raff-question-btn-bg, #fff);
+  border: 1px solid rgba(0,0,0,0.08);
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform .08s ease, box-shadow .12s ease, background .12s ease;
+  font-weight: 600;
+  color: var(--raff-question-btn-text, var(--raff-flip-text, #222));
+  box-shadow: 0 2px 0 rgba(0,0,0,0.02);
+}
+.raff-question-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(0,0,0,0.06); }
+.raff-question-btn[aria-pressed="true"], .raff-question-btn.selected {
+  background: linear-gradient(90deg, var(--raff-question-btn-bg-active, var(--raff-fill, #7b3cff)), #3fb1ff);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 8px 24px rgba(123,60,255,0.12);
+}
+.raff-validation--radios input[type="radio"] { transform: scale(1.05); margin-right:8px; }
+.raff-validation select { padding:10px 12px; border-radius:8px; border:1px solid rgba(0,0,0,0.08); }
+
+/* subtle focus ring for accessibility */
+.raff-question-btn:focus {
+  outline: none;
+  box-shadow: 0 8px 24px rgba(123,60,255,0.12), 0 0 0 3px rgba(123,60,255,0.08);
+}
+
+/* visual cue when user submits without selecting in button mode */
+.raff-question-missing .raff-question-btn { animation: shake .28s ease; }
+@keyframes shake {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  50% { transform: translateX(6px); }
+  75% { transform: translateX(-4px); }
+  100% { transform: translateX(0); }
+}
+
+/* small responsive adjustment */
+@media (max-width:420px) {
+  .raff-question-btn { padding:8px 10px; font-size:14px; border-radius:8px; }
+}

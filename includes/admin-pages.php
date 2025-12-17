@@ -56,12 +56,15 @@ function raffall_register_admin_settings() {
     register_setting('raffall_display_group', 'raffall_show_countdown_cards', ['type'=>'string','default' => '0']);
     register_setting('raffall_display_group', 'raffall_show_progress_cards', ['type'=>'string','default' => '0']);
     register_setting('raffall_display_group', 'raffall_cart_sidebar_enable', ['type'=>'string','default' => '1']);
+
+    // New: question button colours
+    register_setting('raffall_display_group', 'raffall_question_btn_bg', ['type'=>'string', 'default' => '#ffffff']);
+    register_setting('raffall_display_group', 'raffall_question_btn_text', ['type'=>'string', 'default' => '#222222']);
+    register_setting('raffall_display_group', 'raffall_question_btn_bg_active', ['type'=>'string', 'default' => '#7b3cff']);
 }
 
 function raffall_render_settings_page() {
     if (!current_user_can('manage_options')) return;
-    // ...existing code for rendering the full settings form remains here...
-    // (kept minimal in this include — original form markup from the plugin is preserved elsewhere)
     ?>
     <div class="wrap">
         <h1>WooCompetitions — Settings</h1>
@@ -113,6 +116,41 @@ function raffall_render_settings_page() {
                     <td>
                         <label><input type="checkbox" name="raffall_cart_sidebar_enable" value="1" <?php checked('1', get_option('raffall_cart_sidebar_enable','1')); ?>> Enable cart sidebar by default</label>
                         <p class="description">When enabled the cart sidebar will be injected into the footer. It remains fully customisable in the frontend.</p>
+                    </td>
+                </tr>
+
+                <!-- NEW: validation question presentation -->
+                <tr>
+                    <th scope="row">Validation question style</th>
+                    <td>
+                        <?php $style = get_option('raffall_question_style', 'radios'); ?>
+                        <select name="raffall_question_style" id="raffall_question_style">
+                            <option value="radios" <?php selected('radios', $style); ?>>Radios (default)</option>
+                            <option value="buttons" <?php selected('buttons', $style); ?>>Clickable buttons (modern)</option>
+                            <option value="dropdown" <?php selected('dropdown', $style); ?>>Dropdown</option>
+                        </select>
+                        <p class="description">Choose how the validation question is presented to customers on product pages.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">Question button background</th>
+                    <td>
+                        <input type="color" id="raffall_question_btn_bg" name="raffall_question_btn_bg" value="<?php echo esc_attr(get_option('raffall_question_btn_bg', '#ffffff')); ?>">
+                        <p class="description">Background colour for unselected question buttons.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">Question button text colour</th>
+                    <td>
+                        <input type="color" id="raffall_question_btn_text" name="raffall_question_btn_text" value="<?php echo esc_attr(get_option('raffall_question_btn_text', '#222222')); ?>">
+                        <p class="description">Text colour used inside question buttons.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">Question button active background</th>
+                    <td>
+                        <input type="color" id="raffall_question_btn_bg_active" name="raffall_question_btn_bg_active" value="<?php echo esc_attr(get_option('raffall_question_btn_bg_active', '#7b3cff')); ?>">
+                        <p class="description">Background colour for the selected/active question button.</p>
                     </td>
                 </tr>
             </table>

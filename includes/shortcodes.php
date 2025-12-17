@@ -26,13 +26,36 @@ function raffall_shortcode_winners($atts) {
 }
 
 function raffall_render_cards(array $items, bool $show_free_info=false, array $opts=[]) {
-	if (empty($items)) { echo '<p>No items available.</p>'; return; }
-	echo '<div class="raff-grid">';
-	foreach ($items as $it) {
-		echo '<div class="raff-card"><h3>'.esc_html($it['name']).'</h3>';
-		echo '<p>Draw: '.esc_html($it['draw'] ?: 'TBA').'</p>';
-		echo '<p>Price: '.(function_exists('wc_price') ? wc_price($it['price']) : esc_html($it['price'])).'</p>';
-		echo '<a class="button" href="'.esc_url(get_permalink($it['id'])).'">View competition</a></div>';
-	}
-	echo '</div>';
+    // opts can override global options: show_countdown, show_progress, fill_color, bg_color
+    $show_countdown_cards = array_key_exists('show_countdown', $opts) && $opts['show_countdown'] !== null
+        ? (bool)$opts['show_countdown']
+        : (get_option('raffall_show_countdown_cards','0') === '1');
+    $show_progress_cards = array_key_exists('show_progress', $opts) && $opts['show_progress'] !== null
+        ? (bool)$opts['show_progress']
+        : (get_option('raffall_show_progress_cards','0') === '1');
+
+    if (empty($items)) { echo '<p>No items available.</p>'; return; }
+    echo '<div class="raff-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;">';
+    foreach ($items as $it) {
+        echo '<div class="raff-card" style="border:1px solid #eee;border-radius:12px;overflow:hidden;">';
+        if ($it['image']) echo '<img src="' . esc_url($it['image']) . '" alt="" style="width:100%;height:auto;display:block;">';
+        echo '<div style="padding:12px">';
+        echo '<h3 style="margin:0 0 6px;">' . esc_html($it['name']) . '</h3>';
+        echo '<p style="margin:0 0 8px;">Price: ' . wc_price($it['price']) . '</p>';
+
+        // Optionally include countdown on product cards
+        if ($show_countdown_cards && !empty($it['draw'])) {
+            echo '<div class="raff-countdown" data-draw="' . esc_attr($it['draw']) . '" style="margin-bottom:8px;">';
+            echo '<div class="raff-flip" data-unit="days"><div class="number"><span class="current">00</span><span class="next">00</span></div><div class="label">Days</div></div>';
+            echo '<div class="raff-flip" data-unit="hours"><div class="number"><span class="current">00</span><span class="next">00</span></div><div class="label">Hours</div></div>';
+            echo '<div class="raff-flip" data-unit="minutes"><div class="number"><span class="current">00</span><span class="next">00</span></div><div class="label">Minutes</div></div>';
+            echo '<div class="raff-flip" data-unit="seconds"><div class="number"><span class="current">00</span><span class="next">00</span></div><div class="label">Seconds</div></div>';
+            echo '</div>';
+        }
+
+        echo '<a class="button" href="' . esc_url($it['url']) . '">View competition</a>';
+        // ...existing code...
+        echo '</div></div>';
+    }
+    echo '</div>';
 }

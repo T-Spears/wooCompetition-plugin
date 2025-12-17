@@ -22,6 +22,27 @@ function raffall_product_fields() {
 		echo '<select id="_raff_draw_tz" name="_raff_draw_tz" data-current="' . esc_attr($draw_tz_meta) . '"></select></p>';
 		echo '</div>';
 	}
+
+	// render validation inputs (question + options) - existing markup remains
+	// ...
+
+	// Add live preview container for admin product editor
+	// (script will fill / update this element based on current inputs and global settings)
+	echo '<div id="raffall-question-preview" class="raffall-question-preview" style="margin-top:12px;padding:12px;border:1px solid rgba(0,0,0,0.06);border-radius:8px;background:#fff;">';
+	echo '<strong style="display:block;margin-bottom:8px;">Preview</strong>';
+	echo '<div id="raffall-question-preview-inner" aria-hidden="true">';
+	echo '<p style="color:#666;font-size:13px;">No question configured yet.</p>';
+	echo '</div>';
+	echo '</div>';
+
+	// Add live preview container for product card in admin product editor
+	echo '<div id="raffall-card-preview" class="raffall-card-preview" style="margin-top:16px;padding:12px;border:1px solid rgba(0,0,0,0.06);border-radius:8px;background:#fff;">';
+	echo '<strong style="display:block;margin-bottom:8px;">Card preview</strong>';
+	echo '<div id="raffall-card-preview-inner" aria-hidden="true">';
+	// initial placeholder; admin JS will render full preview here
+	echo '<p style="color:#666;font-size:13px;margin:0;">Card preview will update live as you edit title, price and competition fields.</p>';
+	echo '</div>';
+	echo '</div>';
 }
 
 /* Save product meta when product is saved */

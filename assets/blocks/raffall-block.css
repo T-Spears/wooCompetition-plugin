@@ -1,0 +1,6 @@
+.raffall-block-preview img { display:block; border-radius:8px; }
+.raff-card-block { border-radius:12px; padding:10px; background:#fff; border:1px solid rgba(0,0,0,0.04); }
+.raff-card-title { margin:0 0 6px; font-size:16px; font-weight:700; }
+.raff-card-meta { color:#666; font-size:13px; margin-bottom:8px; }
+.raff-progress { height:10px; border-radius:8px; overflow:hidden; background:var(--raff-bg,#f1f1f1); }
+.raff-progress-inner { display:block; height:100%; background:linear-gradient(90deg,var(--raff-fill,#7b3cff),#3fb1ff); width:0%; transition:width 400ms ease; }
