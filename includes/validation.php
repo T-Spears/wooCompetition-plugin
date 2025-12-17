@@ -42,15 +42,24 @@ function raffall_render_validation_question() {
         }
         echo '</select>';
     } elseif ($style === 'buttons') {
-        // Render accessible button group + hidden input
-        echo '<div class="raff-question-buttons" role="radiogroup" aria-label="' . esc_attr($q) . '">';
-        // hidden input used by server validation
+        // Render accessible button group + hidden input AND hidden radio inputs for robust submission
+        echo '<div class="raff-question-buttons-wrapper">';
+        // hidden input used as simple canonical value (keeps legacy JS working)
         echo '<input type="hidden" name="raff_choice" class="raff-choice-hidden" value="">';
+
+        // Hidden radios (kept in DOM for progressive enhancement / form submission)
         foreach ($opts as $idx => $label) {
             if (empty($label)) continue;
-            // use button, add data-value and aria-pressed for toggle state
+            $rid = 'raff_choice_radio_' . $idx;
+            echo '<input type="radio" id="' . esc_attr($rid) . '" name="raff_choice" value="' . esc_attr($idx) . '" class="raff-hidden-radio" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;" />';
+        }
+
+        echo '<div class="raff-question-buttons" role="radiogroup" aria-label="' . esc_attr($q) . '">';
+        foreach ($opts as $idx => $label) {
+            if (empty($label)) continue;
             echo '<button type="button" class="raff-question-btn" data-value="' . esc_attr($idx) . '" aria-pressed="false" tabindex="0">' . esc_html($label) . '</button>';
         }
+        echo '</div>';
         echo '</div>';
     } else {
         // default: radios (existing behaviour)

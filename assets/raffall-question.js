@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', function () {
   document.querySelectorAll('.raff-question-buttons').forEach(function (group) {
-    var hidden = group.querySelector('.raff-choice-hidden');
+    var hidden = group.closest('.raff-question-buttons-wrapper') ? group.closest('.raff-question-buttons-wrapper').querySelector('.raff-choice-hidden') : group.querySelector('.raff-choice-hidden');
     var buttons = Array.prototype.slice.call(group.querySelectorAll('.raff-question-btn'));
 
     function setSelected(btn) {
@@ -11,7 +11,16 @@ document.addEventListener('DOMContentLoaded', function () {
       if (btn) {
         btn.classList.add('selected');
         btn.setAttribute('aria-pressed', 'true');
-        if (hidden) hidden.value = btn.getAttribute('data-value') || '';
+        var value = btn.getAttribute('data-value') || '';
+        if (hidden) hidden.value = value;
+        // also check the matching hidden radio (if present)
+        var radio = document.querySelector('input[name="raff_choice"][value="' + value + '"]');
+        if (radio) {
+          radio.checked = true;
+          // trigger change for any listeners
+          var evt = new Event('change', { bubbles: true });
+          radio.dispatchEvent(evt);
+        }
       }
     }
 
@@ -25,6 +34,7 @@ document.addEventListener('DOMContentLoaded', function () {
           setSelected(btn);
           btn.focus();
         }
+        // left/right arrows navigate
         if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
           e.preventDefault();
           var idx = buttons.indexOf(btn);
@@ -40,9 +50,10 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
 
+    // ensure form submit visual cue if nothing selected
     var form = group.closest('form');
     if (form) {
-      form.addEventListener('submit', function () {
+      form.addEventListener('submit', function (e) {
         if (hidden && !hidden.value) {
           group.classList.add('raff-question-missing');
           setTimeout(function () { group.classList.remove('raff-question-missing'); }, 900);

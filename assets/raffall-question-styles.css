@@ -42,3 +42,14 @@
 @media (max-width:420px) {
   .raff-question-btn { padding:8px 10px; font-size:14px; border-radius:8px; }
 }
+
+/* keep radios present but visually hidden when buttons mode is used */
+.raff-hidden-radio {
+  position: absolute !important;
+  left: -9999px !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  white-space: nowrap !important;
+}
