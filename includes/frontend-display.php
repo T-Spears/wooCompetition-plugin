@@ -3,35 +3,37 @@ if (!defined('ABSPATH')) exit;
 
 /**
  * Procedural renderer for product countdown + progress.
- * Hooked as 'raffall_render_countdown_and_progress'.
+ * Hook: add_action('woocommerce_before_add_to_cart_button', 'raffall_render_countdown_and_progress', 5);
  */
 function raffall_render_countdown_and_progress() {
 	global $product;
 
-	// Try to obtain a WC_Product instance
+	// Try to obtain a WC_Product instance safely
 	$prod = null;
 	if (function_exists('wc_get_product')) {
 		$prod = wc_get_product($product);
-	} elseif (is_object($product)) {
+	} elseif (is_object($product) && method_exists($product, 'get_meta')) {
 		$prod = $product;
 	}
 
 	if (!$prod) return;
 
 	// Only render for competition products
-	if ($prod->get_meta('_raff_is_competition') !== 'yes') return;
+	$is_comp = $prod->get_meta('_raff_is_competition');
+	if ($is_comp !== 'yes' && $is_comp !== true) return;
 
 	$show_countdown = get_option('raffall_show_countdown_product', '1') === '1';
 	$show_progress  = get_option('raffall_show_progress_product', '1') === '1';
 	if (!$show_countdown && !$show_progress) return;
 
-	$draw = $prod->get_meta('_raff_draw_date'); // stored as UTC ISO where available
+	$draw = $prod->get_meta('_raff_draw_date'); // may be empty
 	$cap  = (int) $prod->get_meta('_raff_ticket_cap');
 
-	// Normalize stock value to an integer (some product types may return null)
+	// Normalize stock
 	$stock_raw = $prod->get_stock_quantity();
 	$stock = is_numeric($stock_raw) ? (int) $stock_raw : 0;
 
+	// If ticket cap unset, attempt to derive from stock/next ticket
 	if ($cap < 1) {
 		$next = (int) $prod->get_meta('_raff_next_ticket');
 		if ($next < 1) $next = 1;
@@ -47,7 +49,7 @@ function raffall_render_countdown_and_progress() {
 	echo '<div class="raff-meta-block" style="margin-bottom:12px;">';
 
 	if (!empty($draw) && $show_countdown) {
-		echo '<div class="raff-countdown" data-draw="' . esc_attr($draw) . '" aria-hidden="false">';
+		echo '<div class="raff-countdown" data-draw="' . esc_attr($draw) . '">';
 		echo '<div class="raff-flip" data-unit="days"><div class="number"><span class="current">00</span><span class="next">00</span></div><div class="label">Days</div></div>';
 		echo '<div class="raff-flip" data-unit="hours"><div class="number"><span class="current">00</span><span class="next">00</span></div><div class="label">Hours</div></div>';
 		echo '<div class="raff-flip" data-unit="minutes"><div class="number"><span class="current">00</span><span class="next">00</span></div><div class="label">Minutes</div></div>';
