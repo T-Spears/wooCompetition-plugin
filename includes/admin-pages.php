@@ -103,31 +103,31 @@ function raffall_render_settings_page() {
                 <tr>
                     <th scope="row">Product page: show countdown</th>
                     <td>
-                        <label><input type="checkbox" name="raffall_show_countdown_product" value="1" <?php checked('1', get_option('raffall_show_countdown_product,'1')); ?>> Show countdown on product page</label>
+                        <label><input type="checkbox" name="raffall_show_countdown_product" value="1" <?php checked('1', get_option('raffall_show_countdown_product', '1')); ?>> Show countdown on product pages</label>
                     </td>
                 </tr>
                 <tr>
                     <th scope="row">Product page: show progress</th>
                     <td>
-                        <label><input type="checkbox" name="raffall_show_progress_product" value="1" <?php checked('1', get_option('raffall_show_progress_product,'1')); ?>> Show progress on product page</label>
+                        <label><input type="checkbox" name="raffall_show_progress_product" value="1" <?php checked('1', get_option('raffall_show_progress_product', '1')); ?>> Show progress on product pages</label>
                     </td>
                 </tr>
                 <tr>
                     <th scope="row">Product cards: show countdown</th>
                     <td>
-                        <label><input type="checkbox" name="raffall_show_countdown_cards" value="1" <?php checked('1', get_option('raffall_show_countdown_cards,'0')); ?>> Show countdown on product cards / shortcodes</label>
+                        <label><input type="checkbox" name="raffall_show_countdown_cards" value="1" <?php checked('1', get_option('raffall_show_countdown_cards', '0')); ?>> Show countdown on product cards</label>
                     </td>
                 </tr>
                 <tr>
                     <th scope="row">Product cards: show progress</th>
                     <td>
-                        <label><input type="checkbox" name="raffall_show_progress_cards" value="1" <?php checked('1', get_option('raffall_show_progress_cards,'0')); ?>> Show progress on product cards / shortcodes</label>
+                        <label><input type="checkbox" name="raffall_show_progress_cards" value="1" <?php checked('1', get_option('raffall_show_progress_cards', '0')); ?>> Show progress on product cards</label>
                     </td>
                 </tr>
                 <tr>
                     <th scope="row">Cart sidebar: enable</th>
                     <td>
-                        <label><input type="checkbox" name="raffall_cart_sidebar_enable" value="1" <?php checked('1', get_option('raffall_cart_sidebar_enable,'1')); ?>> Enable cart sidebar by default</label>
+                        <label><input type="checkbox" name="raffall_cart_sidebar_enable" value="1" <?php checked('1', get_option('raffall_cart_sidebar_enable', '1')); ?>> Enable cart sidebar by default</label>
                         <p class="description">When enabled the cart sidebar will be injected into the footer. It remains fully customisable in the frontend.</p>
                     </td>
                 </tr>
@@ -280,7 +280,7 @@ function raffall_render_how_it_works() {
         <p>Examples:</p>
         <pre><code>[raffall_countdown product_id="123"] 
 [raffall_countdown draw="2025-12-13T15:00:00Z"]</code></pre>
-        <p>Output: HTML structure with <code>.raff-countdown</code> and child <code>.raff-flip[data-unit="days|hours|minutes|seconds"]</code> elements. Frontend JS will animate these when assets are loaded.</p>
+        <p>Output: HTML structure with <code>.raff-countdown</code> and child <code>.raff-flip[data-unit="days|hours|minutes|seconds"]</code> elements. Frontend JS will animate these when assets [...]</p>
 
         <h3>raffall_progress</h3>
         <p>Renders the tickets-sold progress bar for a competition product.</p>
@@ -289,21 +289,21 @@ function raffall_render_how_it_works() {
         </ul>
         <p>Example:</p>
         <pre><code>[raffall_progress product_id="123"]</code></pre>
-        <p>Output: container with <code>.raff-progress</code>, inner bar <code>.raff-progress-inner</code> and text. It uses product meta <code>_raff_ticket_cap</code>, <code>_raff_next_ticket</code> and stock to compute percent sold.</p>
+        <p>Output: container with <code>.raff-progress</code>, inner bar <code>.raff-progress-inner</code> and text. It uses product meta <code>_raff_ticket_cap</code>, <code>_raff_next_ticket</code> [...]</p>
 
         <h3>raffall_cart_sidebar</h3>
         <p>Shortcode to render the cart sidebar markup anywhere: <code>[raffall_cart_sidebar]</code>. This duplicates the footer-injected sidebar but allows manual placement.</p>
 
         <h3>Notes & tips</h3>
         <ul>
-            <li>Shortcodes produce HTML that relies on plugin CSS and JS assets (raffall-frontend.css / raffall-frontend.js and raffall-question-styles.js). Make sure assets are enqueued and not blocked.</li>
-            <li>For countdowns, valid draw strings include ISO 8601 (<code>YYYY-MM-DDTHH:MM:SSZ</code>), ISO without timezone (treated as UTC), <code>YYYY-MM-DD HH:MM</code>, or a product's stored UTC draw meta.</li>
+            <li>Shortcodes produce HTML that relies on plugin CSS and JS assets (raffall-frontend.css / raffall-frontend.js and raffall-question-styles.js). Make sure assets are enqueued and not [...]]</li>
+            <li>For countdowns, valid draw strings include ISO 8601 (<code>YYYY-MM-DDTHH:MM:SSZ</code>), ISO without timezone (treated as UTC), <code>YYYY-MM-DD HH:MM</code>, or a product's stored meta.</li>
             <li>If a shortcode shows a blank area, open browser DevTools and check the Console and Network tabs for missing assets or JS errors.</li>
             <li>Server-side validation expects the form field <code>raff_choice</code> (buttons/dropdown) or <code>raff_answer</code> (legacy text). Keep backing up products before bulk edits.</li>
         </ul>
 
         <h2>Developer</h2>
-        <p>The plugin exposes shortcodes and a block; if you need additional attributes (e.g. hide text, custom classes, or ajax refresh), tell me which options and I will extend the shortcodes with those attributes and documentation.</p>
+        <p>The plugin exposes shortcodes and a block; if you need additional attributes (e.g. hide text, custom classes, or ajax refresh), tell me which options and I will extend the shortcodes with them.</p>
     </div>
     <?php
 }
