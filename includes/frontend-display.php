@@ -2,25 +2,33 @@
 if (!defined('ABSPATH')) exit;
 
 /**
- * Render countdown and tickets-sold progress for a given global $product.
- * Hooked as a procedural callback: raffall_render_countdown_and_progress
+ * Procedural renderer for product countdown + progress.
+ * Hooked as 'raffall_render_countdown_and_progress'.
  */
 function raffall_render_countdown_and_progress() {
 	global $product;
 
-	// Ensure we have a WC_Product instance
-	$prod = function_exists('wc_get_product') ? wc_get_product($product) : null;
-	if (!$prod || $prod->get_meta('_raff_is_competition') !== 'yes') return;
+	// Try to obtain a WC_Product instance
+	$prod = null;
+	if (function_exists('wc_get_product')) {
+		$prod = wc_get_product($product);
+	} elseif (is_object($product)) {
+		$prod = $product;
+	}
 
-	// Respect product page toggles
+	if (!$prod) return;
+
+	// Only render for competition products
+	if ($prod->get_meta('_raff_is_competition') !== 'yes') return;
+
 	$show_countdown = get_option('raffall_show_countdown_product', '1') === '1';
 	$show_progress  = get_option('raffall_show_progress_product', '1') === '1';
 	if (!$show_countdown && !$show_progress) return;
 
-	$draw = $prod->get_meta('_raff_draw_date'); // UTC ISO
+	$draw = $prod->get_meta('_raff_draw_date'); // stored as UTC ISO where available
 	$cap  = (int) $prod->get_meta('_raff_ticket_cap');
 
-	// Normalize stock to integer
+	// Normalize stock value to an integer (some product types may return null)
 	$stock_raw = $prod->get_stock_quantity();
 	$stock = is_numeric($stock_raw) ? (int) $stock_raw : 0;
 
@@ -37,14 +45,16 @@ function raffall_render_countdown_and_progress() {
 	$percent = ($cap > 0) ? round(($sold / $cap) * 100) : 0;
 
 	echo '<div class="raff-meta-block" style="margin-bottom:12px;">';
-	if ($draw && $show_countdown) {
-		echo '<div class="raff-countdown" data-draw="' . esc_attr($draw) . '">';
+
+	if (!empty($draw) && $show_countdown) {
+		echo '<div class="raff-countdown" data-draw="' . esc_attr($draw) . '" aria-hidden="false">';
 		echo '<div class="raff-flip" data-unit="days"><div class="number"><span class="current">00</span><span class="next">00</span></div><div class="label">Days</div></div>';
 		echo '<div class="raff-flip" data-unit="hours"><div class="number"><span class="current">00</span><span class="next">00</span></div><div class="label">Hours</div></div>';
 		echo '<div class="raff-flip" data-unit="minutes"><div class="number"><span class="current">00</span><span class="next">00</span></div><div class="label">Minutes</div></div>';
 		echo '<div class="raff-flip" data-unit="seconds"><div class="number"><span class="current">00</span><span class="next">00</span></div><div class="label">Seconds</div></div>';
 		echo '</div>';
 	}
+
 	if ($cap > 0 && $show_progress) {
 		echo '<div class="raff-progress" aria-label="Tickets sold">';
 		echo '<div class="raff-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' . esc_attr($percent) . '" style="--raff-percent:' . esc_attr($percent) . '%; background: var(--raff-bg);">';
@@ -53,5 +63,6 @@ function raffall_render_countdown_and_progress() {
 		echo '<div class="raff-progress-text" style="font-size:13px;color:#333;margin-top:6px;">' . esc_html($percent) . '% sold (' . esc_html($sold) . '/' . esc_html($cap) . ')</div>';
 		echo '</div>';
 	}
+
 	echo '</div>';
 }

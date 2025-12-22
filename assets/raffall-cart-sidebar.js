@@ -132,4 +132,84 @@
         getSettings: function () { return loadSettings(); },
         applySettings: function (s) { saveSettings(s); applySettings(s); }
     };
+
+    (function () {
+        if (typeof window === 'undefined') return;
+
+        function qs(sel, ctx){ return (ctx || document).querySelector(sel); }
+        function qsa(sel, ctx){ return Array.prototype.slice.call((ctx || document).querySelectorAll(sel)); }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            var root = qs('#raffall-cart-sidebar') || qs('.raffall-cart-sidebar');
+            if (!root) return;
+
+            var toggle = qs('.raffall-cart-toggle', root) || document.querySelector('.raffall-cart-toggle');
+            var overlay = qs('.raffall-cart-overlay', root);
+            var closeBtn = qs('.raffall-cart-close', root);
+            var panel = qs('.raffall-cart-panel', root);
+
+            function isOpen(){ return root && root.getAttribute('data-open') === 'true'; }
+            function open() {
+              if (!root) return;
+              root.setAttribute('data-open','true');
+              root.setAttribute('aria-hidden','false');
+              // trap focus on panel
+              if (panel) panel.focus();
+              document.body.classList.add('raffall-cart-open');
+            }
+            function close() {
+              if (!root) return;
+              root.setAttribute('data-open','false');
+              root.setAttribute('aria-hidden','true');
+              document.body.classList.remove('raffall-cart-open');
+              if (toggle) toggle.focus();
+            }
+            function toggleOpen() { if (isOpen()) close(); else open(); }
+
+            if (toggle) {
+              toggle.addEventListener('click', function (e) { e.preventDefault(); toggleOpen(); });
+            }
+            if (overlay) {
+              overlay.addEventListener('click', function (e) { e.preventDefault(); close(); });
+            }
+            if (closeBtn) {
+              closeBtn.addEventListener('click', function (e) { e.preventDefault(); close(); });
+            }
+
+            // close on Esc
+            document.addEventListener('keydown', function (e) {
+              if (e.key === 'Escape' && isOpen()) {
+                close();
+              }
+            });
+
+            // If cart items change (e.g. via AJAX) update count badge when possible
+            function refreshCount() {
+              try {
+                var countElem = qs('.raffall-cart-toggle-count', toggle || document);
+                if (!countElem) return;
+                // attempt to read WooCommerce cart count global if present
+                var cnt = 0;
+                if (window.wc_cart_fragments_params && wc_cart_fragments_params) {
+                  // fall back to existing DOM cart count in header if present
+                }
+                // if there is a cart count element in DOM with class .raffall-cart-count use that
+                var globalCount = qs('.raffall-cart-count');
+                if (globalCount) cnt = parseInt(globalCount.textContent.replace(/\D/g,'')) || 0;
+                countElem.textContent = cnt;
+              } catch (e) { /* silent */ }
+            }
+
+            // initial refresh
+            setTimeout(refreshCount, 50);
+
+            // expose for other scripts
+            window.raffallCartSidebar = {
+              open: open,
+              close: close,
+              toggle: toggleOpen,
+              refreshCount: refreshCount
+            };
+        });
+    })();
 })();
