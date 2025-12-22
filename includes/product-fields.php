@@ -73,7 +73,6 @@ function raffall_product_fields() {
 		'description' => 'Per-product override for how the validation question is presented (falls back to global setting if empty).',
 		'options' => [
 			''        => 'Use global setting',
-			'radios'  => 'Radios',
 			'buttons' => 'Clickable buttons',
 			'dropdown'=> 'Dropdown',
 		],
@@ -116,6 +115,9 @@ function raffall_save_product_fields($product) {
 		'_raff_instant_seed_csv' => 'textarea',
 		'_raff_next_ticket' => 'number',
 		'_raff_ticket_cap' => 'number',
+
+		// NEW: include featured in saved fields
+		'_raff_featured' => 'checkbox',
 	];
 	foreach ($fields as $key => $type) {
 		$val = isset($_POST[$key]) ? $_POST[$key] : '';

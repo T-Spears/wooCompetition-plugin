@@ -22,8 +22,8 @@ function raffall_render_validation_question() {
         return;
     }
 
-    // Prefer per-product style if set, otherwise fall back to global option
-    $style = $product->get_meta('_raff_question_style') ?: get_option('raffall_question_style', 'radios');
+    // Prefer per-product style if set, otherwise fall back to global option (default 'buttons')
+    $style = $product->get_meta('_raff_question_style') ?: get_option('raffall_question_style', 'buttons');
 
     echo '<fieldset class="raff-validation raff-validation--' . esc_attr($style) . '" style="margin-bottom:12px;border:0;padding:0;">';
     echo '<legend style="font-weight:600;margin-bottom:6px;">' . esc_html($q) . '</legend>';
@@ -42,15 +42,11 @@ function raffall_render_validation_question() {
             echo '<option value="' . esc_attr($idx) . '">' . esc_html($label) . '</option>';
         }
         echo '</select>';
-    } elseif ($style === 'buttons') {
-        // Render accessible button group + hidden input AND hidden radio inputs for robust submission
+    } else {
+        // buttons (default)
+        // Render accessible button group + hidden input
         echo '<div class="raff-question-buttons-wrapper">';
         echo '<input type="hidden" name="raff_choice" class="raff-choice-hidden" value="">';
-        foreach ($opts as $idx => $label) {
-            if (empty($label)) continue;
-            $rid = 'raff_choice_radio_' . $idx;
-            echo '<input type="radio" id="' . esc_attr($rid) . '" name="raff_choice" value="' . esc_attr($idx) . '" class="raff-hidden-radio" />';
-        }
         echo '<div class="raff-question-buttons" role="radiogroup" aria-label="' . esc_attr($q) . '">';
         foreach ($opts as $idx => $label) {
             if (empty($label)) continue;
@@ -58,17 +54,6 @@ function raffall_render_validation_question() {
         }
         echo '</div>';
         echo '</div>';
-    } else {
-        // default: radios (existing behaviour)
-        $name = 'raff_choice';
-        foreach ($opts as $idx => $label) {
-            if (empty($label)) continue;
-            $id = 'raff_choice_' . $idx;
-            echo '<div style="margin-bottom:6px;">';
-            echo '<input type="radio" id="' . esc_attr($id) . '" name="' . esc_attr($name) . '" value="' . esc_attr($idx) . '" required>';
-            echo '<label for="' . esc_attr($id) . '" style="margin-left:8px;">' . esc_html($label) . '</label>';
-            echo '</div>';
-        }
     }
 
     echo '<input type="hidden" name="raff_product_id" value="' . esc_attr($product->get_id()) . '">';

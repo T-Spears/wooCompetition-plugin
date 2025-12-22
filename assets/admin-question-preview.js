@@ -24,7 +24,7 @@
       if (p && p.value) return p.value;
       var g = document.getElementById('raffall_question_style');
       if (g && g.value) return g.value;
-      return (window.raffAllPreviewData && window.raffAllPreviewData.style) || 'radios';
+      return (window.raffAllPreviewData && window.raffAllPreviewData.style) || 'buttons';
     }
 
     // Apply CSS variables from localized preview data to preview root's parent so styles pick them up
@@ -50,17 +50,10 @@
         html += '<option>' + (window.raffAllPreviewData ? window.raffAllPreviewData.text_strings.select_placeholder : 'Select') + '</option>';
         options.forEach(function (o) { html += '<option>' + escapeHtml(o) + '</option>'; });
         html += '</select>';
-      } else if (style === 'buttons') {
+      } else {
         html += '<div class="raff-question-buttons" role="radiogroup" aria-disabled="true" style="display:flex;gap:8px;flex-wrap:wrap;">';
         options.forEach(function (o, i) {
           html += '<button type="button" class="raff-question-btn" aria-pressed="false" tabindex="-1" style="pointer-events:none;">' + escapeHtml(o) + '</button>';
-        });
-        html += '</div>';
-      } else {
-        // radios
-        html += '<div>';
-        options.forEach(function (o, i) {
-          html += '<label style="display:block;margin-bottom:6px;"><input type="radio" disabled> ' + escapeHtml(o) + '</label>';
         });
         html += '</div>';
       }
