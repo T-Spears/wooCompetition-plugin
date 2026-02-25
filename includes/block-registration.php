@@ -10,9 +10,9 @@ function raffall_register_block_assets() {
     wp_register_script(
         'raffall-block-editor',
         $block_js,
-        ['wp-blocks','wp-element','wp-components','wp-editor','wp-i18n','wp-api-fetch'],
+        ['wp-blocks','wp-element','wp-components','wp-block-editor','wp-i18n','wp-api-fetch'],
         filemtime(plugin_dir_path(__DIR__) . '/assets/blocks/raffall-block.js'),
-        true
+        false
     );
     wp_register_style(
         'raffall-block-style',
@@ -42,7 +42,7 @@ add_action('rest_api_init', function () {
 	]);
 });
 
-function raffall_rest_get_competitions(\WP_Request $request) {
+function raffall_rest_get_competitions(\WP_REST_Request $request) {
 	if (!function_exists('wc_get_products')) return new WP_Error('no_wc', 'WooCommerce required', ['status'=>400]);
 	$search = $request->get_param('search') ?: '';
 	$per_page = $request->get_param('per_page') ?: 20;

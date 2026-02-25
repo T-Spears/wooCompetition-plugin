@@ -1,9 +1,22 @@
 ( function ( wp ) {
+	if ( ! wp || ! wp.blocks || ! wp.element || ! wp.components ) {
+		return;
+	}
+
+	const blockEditor = wp.blockEditor || wp.editor;
+	if ( ! blockEditor || ! blockEditor.InspectorControls ) {
+		return;
+	}
+
 	const { registerBlockType } = wp.blocks;
 	const { createElement: el, useState, useEffect } = wp.element;
 	const { PanelBody, SelectControl, ToggleControl, TextControl, Button } = wp.components;
-	const { InspectorControls } = wp.blockEditor || wp.editor;
+	const { InspectorControls } = blockEditor;
 	const apiFetch = wp.apiFetch;
+
+	if ( typeof registerBlockType !== 'function' || typeof apiFetch !== 'function' ) {
+		return;
+	}
 
 	registerBlockType('woo-competitions/card', {
 		title: 'Competition Card',
