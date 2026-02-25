@@ -51,7 +51,7 @@ function raffall_shortcode_home($atts) {
 	if (empty($competitions)) {
 		echo '<p>No featured competitions at this time.</p>';
 	} else {
-		$this->render_cards($competitions, false, $atts);
+		raffall_render_cards($competitions, false, $atts);
 	}
 	echo '</div>';
 	return ob_get_clean();
