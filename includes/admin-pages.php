@@ -7,8 +7,8 @@ function raffall_add_admin_settings_page() {
     $parent_slug = 'woocompetitions';
 
     add_menu_page(
-        'WooCompetitions',                // page title
-        'WooCompetitions',                // menu title
+        'Raff-All Competitions',          // page title
+        'Raff-All Competitions',          // menu title
         $capability,                      // capability
         $parent_slug,                     // menu slug
         'raffall_render_settings_page',   // callback
@@ -80,7 +80,7 @@ function raffall_render_settings_page() {
     if (!current_user_can('manage_options')) return;
     ?>
     <div class="wrap">
-        <h1>WooCompetitions — Settings</h1>
+        <h1>Raff-All Competitions — Settings</h1>
         <form method="post" action="options.php">
             <?php settings_fields('raffall_display_group'); do_settings_sections('raffall_display_group'); ?>
             <table class="form-table">
@@ -179,7 +179,7 @@ function raffall_render_competitions_page() {
     $competitions = array_filter(wc_get_products(['limit'=>-1,'status'=>'publish']), function($p){ return $p->get_meta('_raff_is_competition') === 'yes'; });
     ?>
     <div class="wrap">
-        <h1>WooCompetitions — Competitions</h1>
+        <h1>Raff-All Competitions — Competitions</h1>
         <p>Export entries, allocate winners, or manually grant site credit.</p>
         <table class="widefat fixed striped">
             <thead><tr><th>Product</th><th>Draw</th><th>Tickets cap</th><th>Actions</th></tr></thead>
@@ -239,7 +239,7 @@ function raffall_render_how_it_works() {
     if (!current_user_can('manage_options')) return;
     ?>
     <div class="wrap">
-        <h1>How WooCompetitions works</h1>
+        <h1>How Raff-All Competitions works</h1>
         <p>Quick overview of the plugin and where to find settings:</p>
 
         <h2>Core concepts</h2>
@@ -252,7 +252,7 @@ function raffall_render_how_it_works() {
 
         <h2>Where to manage</h2>
         <ul>
-            <li><a href="<?php echo esc_url(admin_url('admin.php?page=woocompetitions')); ?>">Settings → WooCompetitions</a> — visual and display settings.</li>
+            <li><a href="<?php echo esc_url(admin_url('admin.php?page=woocompetitions')); ?>">Settings → Raff-All Competitions</a> — visual and display settings.</li>
             <li><a href="<?php echo esc_url(admin_url('admin.php?page=raffall-competitions')); ?>">Competitions</a> — export entries, allocate winners, grant site credit.</li>
             <li><a href="<?php echo esc_url(admin_url('edit.php?post_type=raff_winner')); ?>">Winners</a> — published winners list.</li>
             <li><a href="<?php echo esc_url(admin_url('edit.php?post_type=product')); ?>">Products</a> — configure competition fields per product.</li>

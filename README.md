@@ -1,6 +1,6 @@
-# Raff-all Premium Competitions
+# Raff-All Competitions
 
-**Raff-all Premium Competitions** is a WordPress plugin that extends WooCommerce to run paid and free-entry competitions. Features include a three-option validation gate, ticket allocation, instant-win support, winners publishing, countdown and tickets-sold progress, admin Flatpickr date/time picker with timezone support, audit logging, and automated GDPR anonymization after two years.
+**Raff-All Competitions** is a WordPress plugin that extends WooCommerce to run paid and free-entry competitions. Features include a three-option validation gate, ticket allocation, instant-win support, winners publishing, countdown and tickets-sold progress, admin Flatpickr date/time picker with timezone support, audit logging, and automated GDPR anonymization after two years.
 
 ---
 

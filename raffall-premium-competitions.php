@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name: WooCompetitions
+ * Plugin Name: Raff-All Competitions
  * Description: Competitions via WooCommerce: validation question gate (3-option), ticket allocation, instant wins, winners page, audit logging, GDPR auto-anonymization (2 years), countdown and percent sold bar, Flatpickr admin picker with timezone.
  * Version: 1.4.0
  * Author: Tai Spears (SpearsTech)
@@ -122,7 +122,7 @@ class RaffAll {
         $install_url = esc_url(self_admin_url('plugin-install.php?tab=search&s=WooCommerce'));
         $plugins_url = esc_url(admin_url('plugins.php'));
         echo '<div class="notice notice-error"><p>';
-        echo 'Raff-all Premium Competitions requires <strong>WooCommerce</strong>. Please install and activate WooCommerce. ';
+        echo 'Raff-All Competitions requires <strong>WooCommerce</strong>. Please install and activate WooCommerce. ';
         echo '<a href="' . $install_url . '">Install WooCommerce</a> or go to <a href="' . $plugins_url . '">Plugins</a>.';
         echo '</p></div>';
     }
